@@ -1,0 +1,8 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+backend/app/data/notes.db
+.venv/
+
+docs/Pictograms.xlsx

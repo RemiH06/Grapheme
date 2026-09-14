@@ -1,0 +1,71 @@
+:root {
+  color-scheme: light;
+  --bg: #eeece4;
+  --page: #e7e4da;
+  --surface: #f8f6f0;
+  --surface-2: #f1efe7;
+  --ink: #211d17;
+  --ink-soft: #58524a;
+  --muted: #8d8778;
+  --line: #dcd7c9;
+  --line-strong: #c7c1b0;
+  --accent: #a23a2c;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(162, 58, 44, 0.12);
+  --accent-soft-2: rgba(162, 58, 44, 0.22);
+  --cat-human: #4a3aa7;
+  --cat-body: #e34948;
+  --cat-places: #2a78d6;
+  --cat-nature: #008300;
+  --cat-food: #eb6834;
+  --cat-animals: #eda100;
+  --cat-objects: #1baf7a;
+  --cat-life: #e87ba4;
+  --cat-structural: #928c7d;
+  --edge: #c9c2ae;
+  --shadow: rgba(40, 30, 20, 0.14);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #17181a;
+    --page: #101112;
+    --surface: #1e2023;
+    --surface-2: #26282b;
+    --ink: #efece3;
+    --ink-soft: #bcb6a8;
+    --muted: #837d70;
+    --line: #34363a;
+    --line-strong: #43464a;
+    --accent: #e2694f;
+    --accent-ink: #1a1210;
+    --accent-soft: rgba(226, 105, 79, 0.16);
+    --accent-soft-2: rgba(226, 105, 79, 0.3);
+    --cat-human: #9085e9;
+    --cat-body: #e66767;
+    --cat-places: #3987e5;
+    --cat-nature: #35b435;
+    --cat-food: #d95926;
+    --cat-animals: #c98500;
+    --cat-objects: #199e70;
+    --cat-life: #d55181;
+    --cat-structural: #85806f;
+    --edge: #3a3c40;
+    --shadow: rgba(0, 0, 0, 0.4);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: 'Zen Kaku Gothic New', 'Hiragino Sans', 'Yu Gothic', system-ui, sans-serif;
+  overflow: hidden;
+}
