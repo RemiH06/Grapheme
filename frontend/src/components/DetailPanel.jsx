@@ -71,7 +71,21 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
               <span className="val">{node.pinyin}</span>
             </div>
           )}
+          {node.strokeTypeName && (
+            <div className="reading-row">
+              <span className="label">Trazo base</span>
+              <span className="val">{node.strokeTypeName}</span>
+            </div>
+          )}
         </div>
+
+        {(node.freqJa != null || node.freqZh != null) && (
+          <div style={{ marginBottom: 16 }}>
+            <div className="section-title">Qué tan común es</div>
+            {node.freqJa != null && <FreqBar label="En japonés" pct={node.freqJa} />}
+            {node.freqZh != null && <FreqBar label="En chino" pct={node.freqZh} />}
+          </div>
+        )}
 
         {node.variants && node.variants.length > 0 && (
           <>
@@ -126,6 +140,18 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
           <div className="notes-status">{notes.status}</div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function FreqBar({ label, pct }) {
+  return (
+    <div className="freq-row">
+      <span className="freq-label">{label}</span>
+      <div className="freq-track">
+        <div className="freq-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="freq-pct">{pct}%</span>
     </div>
   )
 }

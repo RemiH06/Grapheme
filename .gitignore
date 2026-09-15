@@ -6,3 +6,4 @@ backend/app/data/notes.db
 .venv/
 
 docs/Pictograms.xlsx
+data/sources/

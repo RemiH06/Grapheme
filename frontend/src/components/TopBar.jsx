@@ -88,6 +88,16 @@ export default function TopBar({ nodesById, filters, setFilters, onSelectSearch,
       </div>
 
       <button
+        className={`toggle-pill${filters.levelFilter === 'all' ? ' on' : ''}`}
+        title="Por defecto solo se ven JLPT N5-N3 y HSK 1-6. Actívalo para ver también N2/N1 y HSK 7-9."
+        onClick={() =>
+          setFilters((f) => ({ ...f, levelFilter: f.levelFilter === 'all' ? 'core' : 'all' }))
+        }
+      >
+        <span className="sw" /> Ver catálogo completo (N2/N1, HSK 7-9)
+      </button>
+
+      <button
         className={`toggle-pill${filters.showAllRadicals ? ' on' : ''}`}
         onClick={() => setFilters((f) => ({ ...f, showAllRadicals: !f.showAllRadicals }))}
       >

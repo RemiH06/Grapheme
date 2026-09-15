@@ -1,37 +1,42 @@
 # -*- coding: utf-8 -*-
 """
-Genera backend/app/data/graph_data.json a partir de Pictograms.xlsx.
+Genera backend/app/data/graph_data.json: 243 radicales (Pictograms.xlsx)
+mas el catalogo COMPLETO de kanji joyo + hanzi HSK 3.0, cada uno
+conectado a sus radicales/componentes.
 
-Lee la matriz de clasificacion semantica y la lista de radicales por
-numero de trazos del Excel, fusiona formas-variante (por ejemplo la
-version de "persona" a la izquierda, que aparece como caracter aparte
-en el Excel, no es un radical distinto sino la misma idea escrita en
-otra posicion) y le agrega significados en ingles + un set curado de
-caracteres compuestos (kanji/hanzi) con sus radicales componentes.
+Fuentes (ver data/fetch_sources.py para las URLs y licencias):
+  - kanji-jouyou.json: los 2136 kanji joyo con JLPT, frecuencia real
+    (corpus de periodico) y lecturas.
+  - mega_hanzi_compilation.csv: hanzi con nivel HSK 3.0, frecuencia
+    real (Jun Da, corpus moderno de ~200M caracteres) y descomposicion.
+  - makemeahanzi/dictionary.txt: descomposicion posicional (IDS) +
+    etimologia semantica/fonetica, usada como fuente principal de
+    componentes; mega_hanzi es el respaldo cuando un kanji joyo
+    (forma shinjitai) no aparece ahi.
 
 Uso:
     cd data
+    python fetch_sources.py   # una sola vez, cachea los 3 archivos
     python build_dataset.py
 
-Vuelve a correr este script cada vez que se edite este archivo (para
-agregar mas caracteres compuestos) o el Excel (para agregar radicales
-o rellenar lecturas/significados que todavia esten vacios ahi).
+Vuelve a correr build_dataset.py cada vez que se edite este archivo o
+el Excel. No hace falta volver a tocar fetch_sources.py salvo que
+quieras refrescar los datasets (borra data/sources/ y vuelve a correrlo).
 """
+import csv
 import json
+import re
 from pathlib import Path
 
 import openpyxl
 
 ROOT = Path(__file__).resolve().parent.parent
 EXCEL_PATH = ROOT / "docs" / "Pictograms.xlsx"
+SOURCES_DIR = ROOT / "data" / "sources"
 OUT_PATH = ROOT / "backend" / "app" / "data" / "graph_data.json"
 
 CATS = ['Primitive', 'Components', 'Human', 'Body', 'Matter', 'Places',
         'Nature', 'Food', 'Animals', 'Objects', 'Life']
-TIER_NAMES = {
-    0: 'Position/Base', 1: 'Unity', 2: 'Mnemonic duality', 3: 'Modifiers',
-    7: 'Several usages', 8: 'Auxiliar', 9: 'Complex conditional',
-}
 
 
 def split_variants(cell):
@@ -221,265 +226,155 @@ MERGE_INTO = {
     '⺖': '心', '⺘': '手', '⺭': '示', '⻂': '衣', '⺌': '小',
 }
 
-# Lecturas/significados para radicales que TAMBIEN son caracteres corrientes
-# por si solos (no son "compuestos" -> no llevan aristas de componentes).
-# (onyomi, kunyomi, pinyin, meaning, jlpt, hsk)
-STANDALONE = {
-    '一': ('ichi', 'hito(tsu)', 'yī', 'one', 'N5', 1),
-    '二': ('ni', 'futa(tsu)', 'èr', 'two', 'N5', 1),
-    '九': ('kyuu', 'kokono(tsu)', 'jiǔ', 'nine', 'N5', 1),
-    '十': ('juu', 'too', 'shí', 'ten', 'N5', 1),
-    '五': ('go', 'itsu(tsu)', 'wǔ', 'five', 'N5', 1),
-    '人': ('jin', 'hito', 'rén', 'person', 'N5', 1),
-    '口': ('kou', 'kuchi', 'kǒu', 'mouth', 'N5', 1),
-    '木': ('boku', 'ki', 'mù', 'tree, wood', 'N5', 1),
-    '水': ('sui', 'mizu', 'shuǐ', 'water', 'N5', 1),
-    '火': ('ka', 'hi', 'huǒ', 'fire', 'N5', 1),
-    '金': ('kin', 'kane', 'jīn', 'gold, metal, money', 'N5', 1),
-    '土': ('do', 'tsuchi', 'tǔ', 'earth, soil', 'N5', 1),
-    '日': ('nichi', 'hi', 'rì', 'sun, day', 'N5', 1),
-    '月': ('getsu', 'tsuki', 'yuè', 'moon, month', 'N5', 1),
-    '女': ('jo', 'onna', 'nǚ', 'woman', 'N5', 1),
-    '子': ('shi', 'ko', 'zǐ', 'child', 'N5', 1),
-    '大': ('dai', 'oo(kii)', 'dà', 'big', 'N5', 1),
-    '小': ('shou', 'chii(sai)', 'xiǎo', 'small', 'N5', 1),
-    '山': ('san', 'yama', 'shān', 'mountain', 'N5', 1),
-    '川': ('sen', 'kawa', 'chuān', 'river', 'N5', 3),
-    '田': ('den', 'ta', 'tián', 'rice field', 'N5', 4),
-    '目': ('moku', 'me', 'mù', 'eye', 'N5', 2),
-    '耳': ('ji', 'mimi', 'ěr', 'ear', 'N5', 3),
-    '手': ('shu', 'te', 'shǒu', 'hand', 'N5', 1),
-    '心': ('shin', 'kokoro', 'xīn', 'heart, mind', 'N4', 2),
-    '足': ('soku', 'ashi', 'zú', 'foot, leg, sufficient', 'N5', 3),
-    '王': ('ou', None, 'wáng', 'king', 'N2', 3),
-    '牛': ('gyuu', 'ushi', 'niú', 'cow, ox', 'N3', 2),
-    '犬': ('ken', 'inu', 'quǎn', 'dog', 'N4', 4),
-    '馬': ('ba', 'uma', 'mǎ', 'horse', 'N4', 2),
-    '鳥': ('chou', 'tori', 'niǎo', 'bird', 'N5', 3),
-    '魚': ('gyo', 'sakana', 'yú', 'fish', 'N5', 2),
-    '米': ('bei', 'kome', 'mǐ', 'rice', 'N4', 2),
-    '石': ('seki', 'ishi', 'shí', 'stone', 'N4', 3),
-    '禾': (None, None, 'hé', 'grain, rice plant', None, 5),
-    '虫': ('chuu', 'mushi', 'chóng', 'insect, bug', 'N4', 3),
-    '貝': (None, 'kai', 'bèi', 'shell, money', 'N3', None),
-    '力': ('ryoku', 'chikara', 'lì', 'power, strength', 'N4', 2),
-    '刀': ('tou', 'katana', 'dāo', 'knife, sword', 'N4', 5),
-    '弓': ('kyuu', 'yumi', 'gōng', 'bow', 'N2', None),
-    '矢': (None, 'ya', 'shǐ', 'arrow', 'N2', None),
-    '方': ('hou', 'kata', 'fāng', 'direction, square', 'N4', 1),
-    '文': ('bun', 'fumi', 'wén', 'writing, sentence', 'N4', 2),
-    '止': ('shi', 'to(maru)', 'zhǐ', 'stop', 'N3', 3),
-    '白': ('haku', 'shiro', 'bái', 'white', 'N4', 1),
-    '母': ('bo', 'haha', 'mǔ', 'mother', 'N4', 1),
-    '西': ('sei', 'nishi', 'xī', 'west', 'N5', 1),
-    '色': ('shoku', 'iro', 'sè', 'color', 'N4', 2),
-    '身': ('shin', 'mi', 'shēn', 'body', 'N3', 3),
-    '行': ('kou', 'i(ku)', 'xíng', 'go, conduct', 'N5', 1),
-    '赤': ('seki', 'aka', 'chì', 'red', 'N4', None),
-    '里': ('ri', 'sato', 'lǐ', 'village, distance unit', 'N2', None),
-    '高': ('kou', 'taka(i)', 'gāo', 'tall, high', 'N5', 1),
-    '首': ('shu', 'kubi', 'shǒu', 'neck, head', 'N3', 4),
-    '音': ('on', 'oto', 'yīn', 'sound', 'N4', 2),
-    '面': ('men', 'omote', 'miàn', 'face, surface', 'N3', 2),
-    '革': ('kaku', 'kawa', 'gé', 'leather, reform', 'N1', 6),
-    '黄': ('kou', 'ki', 'huáng', 'yellow', 'N3', 3),
-    '黒': ('koku', 'kuro', 'hēi(黑)', 'black', 'N4', None),
-    '無': ('mu', 'na(i)', 'wú(无)', 'nothing, without', 'N4', 2),
-    '歯': ('shi', 'ha', 'chǐ(齿)', 'tooth', 'N3', None),
-    '毛': ('mou', 'ke', 'máo', 'hair, fur', 'N3', 3),
-    '氏': ('shi', 'uji', 'shì', 'clan, family name', 'N2', None),
-    '長': ('chou', 'naga(i)', 'zhǎng(长)', 'long, chief', 'N4', 1),
-    '門': ('mon', 'kado', 'mén', 'gate, door', 'N4', 1),
-    '車': ('sha', 'kuruma', 'chē', 'vehicle, cart', 'N4', 1),
-    '雨': ('u', 'ame', 'yǔ', 'rain', 'N5', 2),
-    '言': ('gen', 'koto', 'yán', 'word, speech', 'N3', 4),
-    '自': ('ji', 'mizuka(ra)', 'zì', 'self, from', 'N4', 2),
-    '見': ('ken', 'mi(ru)', 'jiàn', 'see', 'N5', 1),
-    '生': ('sei', 'i(kiru)', 'shēng', 'life, birth, grow', 'N5', 1),
-    '用': ('you', 'mochi(iru)', 'yòng', 'use', 'N4', 1),
+# Base de una taxonomia de trazos: los radicales de 1 solo trazo son,
+# literalmente, los trazos fundamentales del sistema (bloque Unicode
+# "CJK Strokes" + las 8 categorias clasicas del "yong zi ba fa" 永字八法).
+# strokeType = categoria principal; strokeTypeName = nombre chino/pinyin.
+# Los radicales de 2+ trazos (十, 又, 工...) no se etiquetan aqui todavia:
+# requieren datos reales de ORDEN de trazo (ej. KanjiVG) para no adivinar.
+STROKE_TYPES = {
+    '一': ('heng', '横 (héng) — horizontal'),
+    '｜': ('shu', '竖 (shù) — vertical'),
+    '丶': ('dian', '点 (diǎn) — punto'),
+    'ノ': ('pie', '撇 (piě) — caída a la izquierda'),
+    '乙': ('zhe', '折 (zhé) — trazo quebrado/curvo'),
+    '亅': ('gou', '钩 (gōu) — gancho'),
 }
 
-# Caracteres compuestos: (glyph, onyomi, kunyomi, pinyin, meaning, jlpt, hsk,
-# [(radical/componente, posicion, rol), ...]).
-# rol: 'sem' = aporta significado, 'phon' = aporta sonido, 'mark' = marca
-# grafica sin lectura propia.
-COMPOUNDS = [
-    ('三', 'san', 'mi(ttsu)', 'sān', 'three', 'N5', 1, [('一','top','sem'),('一','mid','sem'),('一','bottom','sem')]),
-    ('四', 'shi', 'yon', 'sì', 'four', 'N5', 1, [('囗','enclosure','sem'),('ハ','inside','mark')]),
-    ('六', 'roku', 'mu(ttsu)', 'liù', 'six', 'N5', 1, [('亠','top','mark'),('ハ','bottom','mark')]),
-    ('林', 'rin', 'hayashi', 'lín', 'woods, grove', 'N4', 4, [('木','left','sem'),('木','right','sem')]),
-    ('森', 'shin', 'mori', 'sēn', 'forest', 'N3', 4, [('木','top','sem'),('木','bottom-left','sem'),('木','bottom-right','sem')]),
-    ('休', 'kyuu', 'yasu(mu)', 'xiū', 'rest', 'N5', 2, [('人','left','sem'),('木','right','sem')]),
-    ('校', 'kou', None, 'xiào', 'school', 'N5', 1, [('木','left','sem'),('交','right','phon')]),
-    ('村', 'son', 'mura', 'cūn', 'village', 'N4', 3, [('木','left','sem'),('寸','right','phon')]),
-    ('材', 'zai', None, 'cái', 'material, timber', 'N3', 4, [('木','left','sem'),('才','right','phon')]),
-    ('本', 'hon', 'moto', 'běn', 'book, origin, root', 'N5', 1, [('木','whole','sem'),('一','bottom','mark')]),
-    ('末', 'matsu', 'sue', 'mò', 'end, tip', 'N2', None, [('木','whole','sem'),('一','top','mark')]),
-    ('東', 'tou', 'higashi', 'dōng(东)', 'east', 'N4', 2, [('日','center','sem'),('木','whole','sem')]),
-    ('橋', 'kyou', 'hashi', 'qiáo', 'bridge', 'N3', 4, [('木','left','sem'),('喬','right','phon')]),
-    ('机', 'ki', 'tsukue', 'jī', 'desk', 'N3', 4, [('木','left','sem'),('几','right','phon')]),
-    ('案', 'an', None, 'àn', 'plan, proposal, desk', 'N3', 4, [('安','top','phon'),('木','bottom','sem')]),
-    ('柱', 'chuu', 'hashira', 'zhù', 'pillar', 'N2', 5, [('木','left','sem'),('主','right','phon')]),
-    ('枝', 'shi', 'eda', 'zhī', 'branch', 'N2', 5, [('木','left','sem'),('支','right','phon')]),
-    ('板', 'ban', 'ita', 'bǎn', 'board, plank', 'N3', 4, [('木','left','sem'),('反','right','phon')]),
-    ('明', 'mei', 'aka(rui)', 'míng', 'bright', 'N4', 3, [('日','left','sem'),('月','right','sem')]),
-    ('時', 'ji', 'toki', 'shí(时)', 'time', 'N5', None, [('日','left','sem'),('寺','right','phon')]),
-    ('曜', 'you', None, None, 'weekday (as in ~曜日)', 'N5', None, [('日','left','sem'),('羽','top-right','mark'),('隹','bottom-right','phon')]),
-    ('春', 'shun', 'haru', 'chūn', 'spring', 'N4', 3, [('日','bottom','sem')]),
-    ('晴', 'sei', 'ha(reru)', 'qíng', 'clear weather', 'N3', 3, [('日','left','sem'),('青','right','phon')]),
-    ('昼', 'chuu', 'hiru', None, 'daytime', 'N4', None, [('日','bottom','sem')]),
-    ('暗', 'an', 'kura(i)', 'àn', 'dark', 'N3', 4, [('日','left','sem'),('音','right','phon')]),
-    ('映', 'ei', 'utsu(ru)', 'yìng', 'reflect, project', 'N3', 5, [('日','left','sem'),('央','right','phon')]),
-    ('昔', 'seki', 'mukashi', 'xī', 'long ago', 'N2', 5, [('日','bottom','sem')]),
-    ('体', 'tai', 'karada', 'tǐ', 'body', 'N4', 2, [('人','left','sem'),('本','right','phon')]),
-    ('他', 'ta', 'hoka', 'tā', 'other, he', 'N4', 1, [('人','left','sem'),('也','right','phon')]),
-    ('何', 'ka', 'nani', 'hé', 'what', 'N5', 1, [('人','left','sem'),('可','right','phon')]),
-    ('住', 'juu', 'su(mu)', 'zhù', 'reside', 'N4', 3, [('人','left','sem'),('主','right','phon')]),
-    ('信', 'shin', None, 'xìn', 'trust, letter', 'N3', 3, [('人','left','sem'),('言','right','sem')]),
-    ('作', 'saku', 'tsuku(ru)', 'zuò', 'make', 'N4', 2, [('人','left','sem'),('乍','right','phon')]),
-    ('使', 'shi', 'tsuka(u)', 'shǐ', 'use, envoy', 'N3', 3, [('人','left','sem'),('吏','right','phon')]),
-    ('便', 'ben', 'tayo(ri)', 'biàn', 'convenient', 'N3', 4, [('人','left','sem'),('更','right','phon')]),
-    ('働', 'dou', 'hatara(ku)', None, 'work, labor (Japan-made kanji)', 'N4', None, [('人','left','sem'),('動','right','sem')]),
-    ('係', 'kei', 'kakari', 'xì', 'relation, in charge of', 'N3', None, [('人','left','sem'),('系','right','phon')]),
-    ('例', 'rei', 'tato(eru)', 'lì', 'example', 'N3', 4, [('人','left','sem'),('列','right','phon')]),
-    ('今', 'kon', 'ima', 'jīn', 'now', 'N5', 1, [('𠆢','top','sem')]),
-    ('以', 'i', None, 'yǐ', 'by means of, with', 'N3', 2, [('人','left','sem')]),
-    ('仕', 'shi', 'tsuka(eru)', 'shì', 'serve', 'N4', 5, [('人','left','sem'),('士','right','phon')]),
-    ('学', 'gaku', 'mana(bu)', 'xué', 'study, learning', 'N5', 1, [('冖','top','sem'),('子','bottom','sem')]),
-    ('字', 'ji', 'aza', 'zì', 'character, letter', 'N5', 1, [('宀','top','sem'),('子','bottom','sem')]),
-    ('海', 'kai', 'umi', 'hǎi', 'sea', 'N4', 2, [('水','left','sem'),('毎','right','phon')]),
-    ('洗', 'sen', 'ara(u)', 'xǐ', 'wash', 'N3', 4, [('水','left','sem'),('先','right','phon')]),
-    ('泳', 'ei', None, 'yǒng', 'swim', 'N3', 4, [('水','left','sem'),('永','right','phon')]),
-    ('注', 'chuu', 'soso(gu)', 'zhù', 'pour,注意 attention', 'N3', 3, [('水','left','sem'),('主','right','phon')]),
-    ('油', 'yu', 'abura', 'yóu', 'oil', 'N3', 3, [('水','left','sem'),('由','right','phon')]),
-    ('酒', 'shu', 'sake', 'jiǔ', 'alcohol', 'N3', 4, [('水','left','sem'),('酉','right','sem')]),
-    ('港', 'kou', 'minato', 'gǎng', 'harbor', 'N3', 5, [('水','left','sem'),('巷','right','phon')]),
-    ('活', 'katsu', None, 'huó', 'life, activity', 'N4', 3, [('水','left','sem'),('舌','right','phon')]),
-    ('漢', 'kan', None, 'hàn(汉)', 'China, Sino-', 'N3', None, [('水','left','sem')]),
-    ('湖', 'ko', 'mizuumi', 'hú', 'lake', 'N3', 4, [('水','left','sem'),('胡','right','phon')]),
-    ('忙', 'bou', 'isoga(shii)', 'máng', 'busy', 'N4', 3, [('心','left','sem'),('亡','right','phon')]),
-    ('快', 'kai', 'kokoroyo(i)', 'kuài', 'pleasant, fast', 'N2', 3, [('心','left','sem'),('夬','right','phon')]),
-    ('性', 'sei', None, 'xìng', 'nature, gender', 'N3', 3, [('心','left','sem'),('生','right','phon')]),
-    ('情', 'jou', 'nasake', 'qíng', 'emotion', 'N3', 4, [('心','left','sem'),('青','right','phon')]),
-    ('想', 'sou', None, 'xiǎng', 'think', 'N3', 2, [('相','top','phon'),('心','bottom','sem')]),
-    ('思', 'shi', 'omo(u)', 'sī', 'think', 'N4', 2, [('田','top','mark'),('心','bottom','sem')]),
-    ('意', 'i', None, 'yì', 'meaning, intention', 'N4', 2, [('音','top','phon'),('心','bottom','sem')]),
-    ('急', 'kyuu', 'iso(gu)', 'jí', 'urgent', 'N3', 3, [('心','bottom','sem')]),
-    ('悪', 'aku', 'waru(i)', 'è(恶)', 'bad, evil', 'N4', None, [('亜','top','phon'),('心','bottom','sem')]),
-    ('忘', 'bou', 'wasu(reru)', 'wàng', 'forget', 'N3', 4, [('亡','top','phon'),('心','bottom','sem')]),
-    ('語', 'go', 'kata(ru)', 'yǔ(语)', 'language, word', 'N5', None, [('言','left','sem'),('吾','right','phon')]),
-    ('話', 'wa', 'hana(su)', 'huà(话)', 'talk, story', 'N5', None, [('言','left','sem'),('舌','right','phon')]),
-    ('読', 'doku', 'yo(mu)', 'dú(读)', 'read', 'N5', None, [('言','left','sem'),('売','right','phon')]),
-    ('記', 'ki', 'shiru(su)', 'jì(记)', 'record', 'N4', None, [('言','left','sem'),('己','right','phon')]),
-    ('計', 'kei', 'haka(ru)', 'jì(计)', 'measure, plan', 'N4', None, [('言','left','sem'),('十','right','sem')]),
-    ('訓', 'kun', None, 'xùn', 'instruction, kun-reading', 'N3', None, [('言','left','sem'),('川','right','phon')]),
-    ('詞', 'shi', None, 'cí(词)', 'word, part of speech', 'N2', None, [('言','left','sem'),('司','right','phon')]),
-    ('課', 'ka', None, 'kè(课)', 'lesson, section', 'N3', None, [('言','left','sem'),('果','right','phon')]),
-    ('議', 'gi', None, 'yì(议)', 'discuss', 'N3', None, [('言','left','sem'),('義','right','phon')]),
-    ('詩', 'shi', None, 'shī', 'poem', 'N2', 5, [('言','left','sem'),('寺','right','phon')]),
-    ('好', 'kou', 'su(ki)', 'hǎo', 'like, good', 'N4', 1, [('女','left','sem'),('子','right','sem')]),
-    ('姉', 'shi', 'ane', None, 'older sister', 'N5', None, [('女','left','sem'),('市','right','phon')]),
-    ('妹', 'mai', 'imouto', 'mèi', 'younger sister', 'N5', 1, [('女','left','sem'),('未','right','phon')]),
-    ('始', 'shi', 'hajime(ru)', 'shǐ', 'begin', 'N4', 3, [('女','left','sem'),('台','right','phon')]),
-    ('姓', 'sei', None, 'xìng', 'surname', 'N2', 5, [('女','left','sem'),('生','right','phon')]),
-    ('妻', 'sai', 'tsuma', 'qī', 'wife', 'N2', 4, [('女','bottom','sem')]),
-    ('如', 'jo', None, 'rú', 'as if, likeness', 'N1', 5, [('女','left','sem'),('口','right','sem')]),
-    ('姫', 'ki', 'hime', None, 'princess', 'N1', None, [('女','left','sem'),('臣','right','phon')]),
-    ('持', 'ji', 'mo(tsu)', 'chí', 'hold', 'N4', 3, [('手','left','sem'),('寺','right','phon')]),
-    ('打', 'da', 'u(tsu)', 'dǎ', 'hit', 'N3', 2, [('手','left','sem'),('丁','right','phon')]),
-    ('投', 'tou', 'na(geru)', 'tóu', 'throw', 'N3', 4, [('手','left','sem'),('殳','right','phon')]),
-    ('指', 'shi', 'yubi', 'zhǐ', 'finger, point', 'N3', 3, [('手','left','sem'),('旨','right','phon')]),
-    ('押', 'ou', 'o(su)', 'yā', 'push, stamp', 'N2', 5, [('手','left','sem'),('甲','right','phon')]),
-    ('拾', 'shuu', 'hiro(u)', 'shí', 'pick up', 'N3', 5, [('手','left','sem'),('合','right','phon')]),
-    ('招', 'shou', 'mane(ku)', 'zhāo', 'invite, beckon', 'N1', 5, [('手','left','sem'),('召','right','phon')]),
-    ('焼', 'shou', 'ya(ku)', None, 'burn', 'N3', None, [('火','left','sem'),('尭','right','phon')]),
-    ('煙', 'en', 'kemuri', 'yān(烟)', 'smoke', 'N2', 4, [('火','left','sem'),('垔','right','phon')]),
-    ('然', 'zen', None, 'rán', 'so, like that', 'N3', 4, [('火','bottom','sem')]),
-    ('銀', 'gin', None, 'yín(银)', 'silver', 'N3', 4, [('金','left','sem'),('艮','right','phon')]),
-    ('針', 'shin', 'hari', 'zhēn(针)', 'needle', 'N2', 5, [('金','left','sem'),('十','right','phon')]),
-    ('鉄', 'tetsu', None, 'tiě(铁)', 'iron', 'N3', 4, [('金','left','sem'),('失','right','phon')]),
-    ('地', 'chi', None, 'dì', 'ground, earth', 'N4', 1, [('土','left','sem'),('也','right','phon')]),
-    ('場', 'jou', 'ba', 'chǎng(场)', 'place', 'N4', 3, [('土','left','sem'),('昜','right','phon')]),
-    ('名', 'mei', 'na', 'míng', 'name', 'N5', 1, [('夕','top','sem'),('口','bottom','sem')]),
-    ('号', 'gou', None, 'hào', 'number, sign', 'N3', 3, [('口','bottom','sem')]),
-    ('味', 'mi', 'aji', 'wèi', 'taste', 'N3', 3, [('口','left','sem'),('未','right','phon')]),
-    ('和', 'wa', None, 'hé', 'harmony, Japan', 'N3', 2, [('禾','left','phon'),('口','right','sem')]),
-    ('加', 'ka', 'kuwa(eru)', 'jiā', 'add', 'N3', 3, [('力','right','sem'),('口','left','sem')]),
-    ('相', 'sou', 'ai', 'xiāng', 'mutual, look', 'N3', 3, [('木','left','sem'),('目','right','sem')]),
-    ('省', 'sei', 'habu(ku)', 'shěng', 'omit, reflect, province', 'N3', 3, [('少','top','phon'),('目','bottom','sem')]),
-    ('聞', 'bun', 'ki(ku)', 'wén(闻)', 'hear, news', 'N5', None, [('門','enclosure','phon'),('耳','inside','sem')]),
-    ('買', 'bai', 'ka(u)', 'mǎi(买)', 'buy', 'N5', None, [('貝','bottom','sem')]),
-    ('費', 'hi', 'tsui(yasu)', 'fèi(费)', 'expense', 'N3', 4, [('弗','top','phon'),('貝','bottom','sem')]),
-    ('貨', 'ka', None, 'huò(货)', 'goods, currency', 'N2', 5, [('化','top','phon'),('貝','bottom','sem')]),
-    ('貯', 'cho', None, 'zhù(贮)', 'store, savings', 'N2', None, [('貝','left','sem')]),
-    ('線', 'sen', None, 'xiàn(线)', 'line', 'N4', 3, [('糸','left','sem'),('泉','right','phon')]),
-    ('紙', 'shi', 'kami', 'zhǐ(纸)', 'paper', 'N5', 2, [('糸','left','sem'),('氏','right','phon')]),
-    ('終', 'shuu', 'o(waru)', 'zhōng(终)', 'end', 'N4', 4, [('糸','left','sem'),('冬','right','phon')]),
-    ('続', 'zoku', 'tsuzu(ku)', 'xù(续)', 'continue', 'N4', 4, [('糸','left','sem'),('売','right','phon')]),
-    ('組', 'so', 'ku(mu)', 'zǔ(组)', 'group, assemble', 'N3', 4, [('糸','left','sem'),('且','right','phon')]),
-    ('給', 'kyuu', None, 'jǐ(给)', 'supply, wage', 'N3', 5, [('糸','left','sem'),('合','right','phon')]),
-    ('花', 'ka', 'hana', 'huā', 'flower', 'N5', 1, [('⺾','top','sem'),('化','bottom','phon')]),
-    ('茶', 'cha', None, 'chá', 'tea', 'N5', 2, [('⺾','top','sem'),('木','bottom','sem')]),
-    ('草', 'sou', 'kusa', 'cǎo', 'grass', 'N4', 4, [('⺾','top','sem'),('早','bottom','phon')]),
-    ('薬', 'yaku', 'kusuri', 'yào(药)', 'medicine', 'N4', None, [('⺾','top','sem'),('楽','bottom','phon')]),
-    ('答', 'tou', 'kota(eru)', 'dá', 'answer', 'N4', 3, [('竹','top','sem'),('合','bottom','phon')]),
-    ('第', 'dai', None, 'dì', 'ordinal prefix', 'N3', 4, [('竹','top','sem'),('弟','bottom','phon')]),
-    ('筆', 'hitsu', 'fude', 'bǐ(笔)', 'writing brush', 'N2', 5, [('竹','top','sem'),('聿','bottom','sem')]),
-    ('雪', 'setsu', 'yuki', 'xuě', 'snow', 'N3', 3, [('雨','top','sem')]),
-    ('電', 'den', None, 'diàn(电)', 'electricity', 'N5', None, [('雨','top','sem'),('申','bottom','phon')]),
-    ('雲', 'un', 'kumo', 'yún(云)', 'cloud', 'N3', 4, [('雨','top','sem'),('云','bottom','phon')]),
-    ('岩', 'gan', 'iwa', 'yán', 'rock', 'N2', 5, [('山','top','sem'),('石','bottom','sem')]),
-    ('島', 'tou', 'shima', 'dǎo(岛)', 'island', 'N3', 3, [('鳥','top','sem'),('山','bottom','sem')]),
-    ('研', 'ken', 'to(gu)', 'yán', 'polish, research', 'N3', 3, [('石','left','sem'),('开','right','phon')]),
-    ('科', 'ka', None, 'kē', 'department, science', 'N3', 3, [('禾','left','sem'),('斗','right','sem')]),
-    ('秋', 'shuu', 'aki', 'qiū', 'autumn', 'N4', 3, [('禾','left','sem'),('火','right','phon')]),
-    ('種', 'shu', 'tane', 'zhǒng(种)', 'seed, kind', 'N3', 3, [('禾','left','sem'),('重','right','phon')]),
-    ('蛍', 'kei', 'hotaru', 'yíng(萤)', 'firefly', 'N1', None, [('虫','bottom','sem')]),
-    ('輪', 'rin', 'wa', 'lún(轮)', 'wheel, ring', 'N2', 5, [('車','left','sem'),('侖','right','phon')]),
-    ('軽', 'kei', 'karu(i)', 'qīng(轻)', 'light (weight)', 'N3', 4, [('車','left','sem'),('圣','right','phon')]),
-    ('間', 'kan', 'aida', 'jiān(间)', 'interval, between', 'N5', None, [('門','enclosure','sem'),('日','inside','sem')]),
-    ('開', 'kai', 'hira(ku)', 'kāi(开)', 'open', 'N4', None, [('門','enclosure','sem')]),
-    ('閉', 'hei', 'to(jiru)', 'bì(闭)', 'close', 'N3', None, [('門','enclosure','sem'),('才','inside','phon')]),
-    ('別', 'betsu', 'waka(reru)', 'bié', 'separate, different', 'N3', 3, [('刀','right','sem')]),
-    ('前', 'zen', 'mae', 'qián', 'before, front', 'N5', 1, [('刀','bottom-right','sem')]),
-    ('利', 'ri', None, 'lì', 'profit, advantage', 'N2', 4, [('禾','left','sem'),('刀','right','sem')]),
-    ('勉', 'ben', None, 'miǎn', 'diligence, exertion', 'N3', 5, [('免','left','phon'),('力','right','sem')]),
-    ('動', 'dou', 'ugo(ku)', 'dòng(动)', 'move', 'N4', 2, [('重','left','phon'),('力','right','sem')]),
-    ('規', 'ki', None, 'guī(规)', 'standard, rule', 'N2', 5, [('夫','left','phon'),('見','right','sem')]),
-    ('視', 'shi', None, 'shì(视)', 'look at, view', 'N2', 4, [('示','left','sem'),('見','right','sem')]),
-    ('顔', 'gan', 'kao', 'yán(颜)', 'face', 'N4', None, [('彦','left','phon'),('頁','right','sem')]),
-    ('題', 'dai', None, 'tí(题)', 'topic, title', 'N4', 4, [('是','top','phon'),('頁','bottom','sem')]),
-    ('願', 'gan', 'nega(u)', 'yuàn(愿)', 'wish, request', 'N3', 5, [('原','left','phon'),('頁','right','sem')]),
-    ('理', 'ri', None, 'lǐ', 'logic, reason', 'N3', 3, [('王','left','sem'),('里','right','phon')]),
-    ('物', 'butsu', 'mono', 'wù', 'thing', 'N4', 1, [('牛','left','sem'),('勿','right','phon')]),
-    ('特', 'toku', None, 'tè', 'special', 'N3', 4, [('牛','left','sem'),('寺','right','phon')]),
-    ('猫', 'byou', 'neko', 'māo', 'cat', None, 3, [('⺨','left','sem'),('苗','right','phon')]),
-    ('料', 'ryou', None, 'liào', 'fee, materials', 'N3', 4, [('米','left','sem'),('斗','right','sem')]),
-    ('飲', 'in', 'no(mu)', 'yǐn(饮)', 'drink', 'N5', None, [('食','left','sem'),('欠','right','phon')]),
-    ('飯', 'han', 'meshi', 'fàn(饭)', 'cooked rice, meal', 'N5', None, [('食','left','sem'),('反','right','phon')]),
-    ('館', 'kan', None, 'guǎn(馆)', 'building, hall', 'N4', 3, [('食','left','sem'),('官','right','phon')]),
-    ('複', 'fuku', None, 'fù(复)', 'duplicate, complex', 'N2', 5, [('衣','left','sem'),('复','right','phon')]),
-    ('祖', 'so', None, 'zǔ', 'ancestor', 'N3', 4, [('示','left','sem'),('且','right','phon')]),
-    ('社', 'sha', 'yashiro', 'shè', 'shrine, company', 'N4', 3, [('示','left','sem'),('土','right','sem')]),
-    ('神', 'shin', 'kami', 'shén', 'god, spirit', 'N3', 3, [('示','left','sem'),('申','right','phon')]),
-    ('対', 'tai', None, 'duì(对)', 'opposing, versus', 'N3', 4, [('寸','right','sem')]),
-    ('市', 'shi', 'ichi', 'shì', 'city, market', 'N4', 2, [('亠','top','mark'),('巾','bottom','sem')]),
-]
+# ---------------------------------------------------------------------------
+# Descomposicion de caracteres compuestos via Ideographic Description
+# Sequences (⿰⿱⿲⿳⿴⿵⿶⿷⿸⿹⿺⿻, bloque Unicode 2FF0-2FFB).
+# ---------------------------------------------------------------------------
+IDS_POS = {
+    '⿰': ('left', 'right'), '⿱': ('top', 'bottom'),
+    '⿲': ('left', 'center', 'right'), '⿳': ('top', 'center', 'bottom'),
+    '⿴': ('enclosure', 'inside'), '⿵': ('enclosure', 'inside'),
+    '⿶': ('enclosure', 'inside'), '⿷': ('enclosure', 'inside'),
+    '⿸': ('enclosure', 'inside'), '⿹': ('enclosure', 'inside'),
+    '⿺': ('enclosure', 'inside'), '⿻': ('whole', 'whole'),
+}
+
+
+def _parse_ids(s, i):
+    ch = s[i]
+    if ch in IDS_POS:
+        children, j = [], i + 1
+        for _ in IDS_POS[ch]:
+            node, j = _parse_ids(s, j)
+            children.append(node)
+        return {'op': ch, 'children': children}, j
+    return {'leaf': ch}, i + 1
+
+
+def decompose_ids(ids_string):
+    """'⿰日月' -> [('日','left'), ('月','right')]. Ignora placeholders '?'."""
+    if not ids_string:
+        return []
+    try:
+        tree, _ = _parse_ids(ids_string, 0)
+    except IndexError:
+        return []
+    out = []
+
+    def walk(node, prefix):
+        if 'leaf' in node:
+            if node['leaf'] not in ('？', '?'):
+                out.append((node['leaf'], prefix or 'whole'))
+            return
+        for child, pos in zip(node['children'], IDS_POS[node['op']]):
+            walk(child, f"{prefix}-{pos}" if prefix else pos)
+
+    walk(tree, '')
+    return out
+
+
+def load_jouyou():
+    with open(SOURCES_DIR / "kanji-jouyou.json", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def load_mega_hanzi():
+    """dict: caracter simplificado -> fila del csv (se queda con la fila
+    que tenga nivel HSK si hay glifos duplicados)."""
+    by_glyph = {}
+    with open(SOURCES_DIR / "mega_hanzi_compilation.csv", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            g = (row.get('simplified') or '').strip()
+            if not g:
+                continue
+            if g not in by_glyph or (row.get('hsk30_level') and not by_glyph[g].get('hsk30_level')):
+                by_glyph[g] = row
+    return by_glyph
+
+
+def load_mmh_dictionary():
+    by_glyph = {}
+    with open(SOURCES_DIR / "makemeahanzi_dictionary.txt", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            d = json.loads(line)
+            by_glyph[d['character']] = d
+    return by_glyph
+
+
+def hsk_level_of(row):
+    if not row:
+        return None
+    m = re.match(r'HSK_L(\d+)', row.get('hsk30_level') or '')
+    return int(m.group(1)) if m else None
+
+
+def components_of(glyph, mmh_by_glyph, mega_by_glyph):
+    """[(componente, posicion, rol)] para un caracter compuesto, o [] si
+    es atomico. Prioriza Make Me a Hanzi (posicion real + rol
+    semantico/fonetico via su etimologia); mega_hanzi es el respaldo
+    (lista plana, sin posicion) para formas que no esten ahi."""
+    mmh = mmh_by_glyph.get(glyph)
+    if mmh and mmh.get('decomposition'):
+        leaves = [(g, p) for g, p in decompose_ids(mmh['decomposition']) if g != glyph]
+        if leaves:
+            etym = mmh.get('etymology') or {}
+            phon, sem = etym.get('phonetic'), etym.get('semantic')
+            return [(g, pos, 'phon' if g == phon else 'sem') for g, pos in leaves]
+    row = mega_by_glyph.get(glyph)
+    if row:
+        raw = row.get('decomposition2_with_radical', '') or ''
+        parts = [p.strip() for p in raw.split(',') if p.strip() and p.strip() != 'No glyph available']
+        parts = [p for p in parts if p != glyph]
+        if len(parts) >= 2:
+            return [(p, 'component', 'sem') for p in parts]
+    return []
+
+
+def pct_rank(rank, worst_rank):
+    """Percentil 0-100 dentro de SU PROPIO corpus (japones y chino no son
+    comparables entre si en una sola escala; cada uno usa su propio rango
+    de frecuencia real)."""
+    if rank is None or worst_rank <= 1:
+        return None
+    return max(0, min(100, round(100 * (1 - (rank - 1) / (worst_rank - 1)))))
 
 
 def build():
     by_glyph = {d['glyph']: d for d in radicals_raw}
     n_of = lambda g: by_glyph[g]['n'] if g in by_glyph else 9999
 
+    # ---- 1) radicales canonicos (Excel) ----
     canonical = {}
     for rec in radicals_raw:
         g = rec['glyph']
         target = MERGE_INTO.get(g, g)
+        stroke_type, stroke_type_name = STROKE_TYPES.get(target, (None, None))
         node = canonical.setdefault(target, {
             'id': None, 'glyph': target, 'variants': [], 'isRadical': True,
             'strokeCount': None, 'category': None, 'tier': None,
             'onyomi': None, 'kunyomi': None, 'pinyin': None,
             'meaning': RADICAL_MEANING.get(target), 'n': n_of(target),
+            'strokeType': stroke_type, 'strokeTypeName': stroke_type_name,
+            'isCharacter': False, 'jlpt': None, 'hsk': None,
+            'freqJa': None, 'freqZh': None,
         })
         if g != target:
             node['variants'].append(g)
@@ -488,48 +383,89 @@ def build():
         if rec.get('category') and node['category'] is None:
             node['category'] = rec['category']
             node['tier'] = rec.get('tier')
-        if rec.get('onyomi') and node['onyomi'] is None:
-            node['onyomi'] = rec['onyomi']
-        if rec.get('kunyomi') and node['kunyomi'] is None:
-            node['kunyomi'] = rec['kunyomi']
-        if rec.get('pinyin') and node['pinyin'] is None:
-            node['pinyin'] = rec['pinyin']
         if not node['meaning']:
             node['meaning'] = RADICAL_MEANING.get(target)
 
-    for g, (on, kun, py, meaning, jlpt, hsk) in STANDALONE.items():
-        node = canonical.get(g)
-        if node is None:
+    # ---- 2) catalogo completo de kanji joyo + hanzi HSK 3.0 ----
+    jouyou = load_jouyou()
+    mega_by_glyph = load_mega_hanzi()
+    mmh_by_glyph = load_mmh_dictionary()
+
+    ja_worst = max(v['freq'] for v in jouyou.values() if v.get('freq') is not None)
+    zh_worst = max(
+        (int(r['frequency_junda']) for r in mega_by_glyph.values() if (r.get('frequency_junda') or '').isdigit()),
+        default=None,
+    )
+
+    all_glyphs = set(jouyou.keys()) | {g for g, r in mega_by_glyph.items() if hsk_level_of(r)}
+
+    characters_final = []
+    compound_id_by_glyph = {}
+    compound_order = []  # (glyph, node_data) en el orden en que se crean
+
+    for glyph in sorted(all_glyphs):
+        ja = jouyou.get(glyph)
+        zh = mega_by_glyph.get(glyph)
+        zh_level = hsk_level_of(zh)
+        langs = []
+        if ja:
+            langs.append('ja')
+        if zh_level:
+            langs.append('zh')
+
+        onyomi = ', '.join(ja['readings_on']) if ja and ja.get('readings_on') else None
+        kunyomi = ', '.join(ja['readings_kun']) if ja and ja.get('readings_kun') else None
+        pinyin = zh.get('pinyin') if zh else None
+        if ja and ja.get('meanings'):
+            meaning = ja['meanings'][0]
+        elif zh:
+            meaning = zh.get('meaning_junda') or zh.get('cc_cedict_definitions')
+        else:
+            meaning = None
+        jlpt = f"N{ja['jlpt_new']}" if ja and ja.get('jlpt_new') else None
+        freq_ja = pct_rank(ja.get('freq'), ja_worst) if ja else None
+        freq_zh = None
+        if zh and zh_worst and (zh.get('frequency_junda') or '').isdigit():
+            freq_zh = pct_rank(int(zh['frequency_junda']), zh_worst)
+
+        target = MERGE_INTO.get(glyph, glyph)
+        if target in canonical:
+            # el caracter ES uno de nuestros 243 radicales: se fusiona en
+            # ese nodo en vez de crear un duplicado (ej. 木, 人, 水, 好...
+            # no, 好 no es radical, pero 木/人/水 si lo son).
+            node = canonical[target]
+            node['isCharacter'] = True
+            node['onyomi'] = onyomi or node['onyomi']
+            node['kunyomi'] = kunyomi or node['kunyomi']
+            node['pinyin'] = pinyin or node['pinyin']
+            if meaning:
+                node['meaning'] = meaning
+            node['jlpt'] = jlpt
+            node['hsk'] = zh_level
+            node['freqJa'] = freq_ja
+            node['freqZh'] = freq_zh
             continue
-        node['isCharacter'] = True
-        node['onyomi'] = on or node['onyomi']
-        node['kunyomi'] = kun or node['kunyomi']
-        node['pinyin'] = py or node['pinyin']
-        if meaning:
-            node['meaning'] = meaning
-        node['jlpt'] = jlpt
-        node['hsk'] = hsk
+
+        if not langs:
+            continue  # ni joyo ni HSK (solo aparecio como fila de mega_hanzi sin nivel)
+
+        cid = f"c{len(compound_order) + 1:05d}"
+        data = {
+            'id': cid, 'glyph': glyph, 'isCharacter': True, 'isRadical': False,
+            'onyomi': onyomi, 'kunyomi': kunyomi, 'pinyin': pinyin, 'meaning': meaning,
+            'jlpt': jlpt, 'hsk': zh_level, 'langs': langs,
+            'freqJa': freq_ja, 'freqZh': freq_zh,
+        }
+        characters_final.append(data)
+        compound_id_by_glyph[glyph] = cid
+        compound_order.append(glyph)
 
     radicals_final = sorted(canonical.values(), key=lambda d: d['n'])
     for i, r in enumerate(radicals_final):
         r['id'] = f"r{i + 1:03d}"
     radical_id_by_glyph = {r['glyph']: r['id'] for r in radicals_final}
 
-    characters_final, compound_id_by_glyph = [], {}
-    for i, (glyph, on, kun, py, meaning, jlpt, hsk, comps) in enumerate(COMPOUNDS):
-        cid = f"c{i + 1:03d}"
-        langs = []
-        if on or kun or jlpt:
-            langs.append('ja')
-        if py or hsk:
-            langs.append('zh')
-        characters_final.append({
-            'id': cid, 'glyph': glyph, 'isCharacter': True, 'isRadical': False,
-            'onyomi': on, 'kunyomi': kun, 'pinyin': py, 'meaning': meaning,
-            'jlpt': jlpt, 'hsk': hsk, 'langs': langs,
-        })
-        compound_id_by_glyph[glyph] = cid
-
+    # ---- 3) aristas: componente -> radical/compuesto/extra ----
     extra_nodes = {}
 
     def resolve_component_id(glyph):
@@ -540,16 +476,18 @@ def build():
             return compound_id_by_glyph[glyph]
         if glyph in extra_nodes:
             return extra_nodes[glyph]['id']
-        eid = f"x{len(extra_nodes) + 1:03d}"
+        eid = f"x{len(extra_nodes) + 1:04d}"
         extra_nodes[glyph] = {'id': eid, 'glyph': glyph}
         return eid
 
     edges_final = []
-    for i, (glyph, on, kun, py, meaning, jlpt, hsk, comps) in enumerate(COMPOUNDS):
-        cid = f"c{i + 1:03d}"
-        for radical_glyph, pos, role in comps:
-            edges_final.append({'from': cid, 'to': resolve_component_id(radical_glyph),
-                                 'pos': pos, 'role': role})
+    for glyph in compound_order:
+        cid = compound_id_by_glyph[glyph]
+        for comp_glyph, pos, role in components_of(glyph, mmh_by_glyph, mega_by_glyph):
+            edges_final.append({
+                'from': cid, 'to': resolve_component_id(comp_glyph),
+                'pos': pos, 'role': role,
+            })
 
     return {
         'radicals': radicals_final,
@@ -564,6 +502,8 @@ if __name__ == '__main__':
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(OUT_PATH, 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, separators=(',', ':'))
+    ja_n = sum(1 for c in result['characters'] if 'ja' in c['langs'])
+    zh_n = sum(1 for c in result['characters'] if 'zh' in c['langs'])
     print(f"radicals={len(result['radicals'])} characters={len(result['characters'])} "
-          f"extras={len(result['extras'])} edges={len(result['edges'])}")
+          f"(ja={ja_n} zh={zh_n}) extras={len(result['extras'])} edges={len(result['edges'])}")
     print(f"-> {OUT_PATH}")

@@ -12,13 +12,35 @@ function radiusOf(n) {
   return 3.4
 }
 
-function computeVisible(nodesById, adjacency, lang, showAllRadicals) {
+const CORE_JLPT = new Set(['N5', 'N4', 'N3'])
+const CORE_HSK_MAX = 6
+
+/** "Core" = JLPT N5-N3 o HSK 1-6: lo que de verdad se estudia para la
+ * certificacion. El resto (N2/N1, HSK 7-9) existe en los datos pero
+ * queda oculto por defecto para que el grafo no se sature. */
+function isCore(n) {
+  const jaCore = n.langs?.includes('ja') && CORE_JLPT.has(n.jlpt)
+  const zhCore = n.langs?.includes('zh') && n.hsk != null && n.hsk <= CORE_HSK_MAX
+  return jaCore || zhCore
+}
+
+function computeVisible(nodesById, adjacency, lang, showAllRadicals, levelFilter) {
   const keep = new Set()
   for (const n of nodesById.values()) {
-    if (n.kind === 'compound' && (lang === 'all' || n.langs.includes(lang))) keep.add(n.id)
+    if (n.kind !== 'compound') continue
+    if (lang !== 'all' && !n.langs.includes(lang)) continue
+    if (levelFilter === 'core' && !isCore(n)) continue
+    keep.add(n.id)
   }
   for (const id of Array.from(keep)) {
-    for (const nb of adjacency.get(id)) keep.add(nb.id)
+    for (const nb of adjacency.get(id)) {
+      const nbNode = nodesById.get(nb.id)
+      // en modo "core" no arrastramos otro caracter completo solo porque
+      // sea componente de uno core (ej. 体 usa 本 como fonetico); los
+      // radicales y componentes fonéticos "extra" si se muestran siempre.
+      if (levelFilter === 'core' && nbNode.kind === 'compound' && !isCore(nbNode)) continue
+      keep.add(nb.id)
+    }
   }
   if (showAllRadicals) {
     for (const n of nodesById.values()) if (n.kind === 'radical') keep.add(n.id)
@@ -260,7 +282,7 @@ const RadicalGraph = forwardRef(function RadicalGraph(
 
   // ---- reconstruir la simulacion cuando cambian los datos o el filtro ----
   useEffect(() => {
-    const visible = computeVisible(nodesById, adjacency, filters.lang, filters.showAllRadicals)
+    const visible = computeVisible(nodesById, adjacency, filters.lang, filters.showAllRadicals, filters.levelFilter)
     const activeNodes = Array.from(visible).map((id) => nodesById.get(id))
     const idSet = new Set(activeNodes.map((n) => n.id))
     const activeEdges = edges.filter((e) => {
@@ -303,7 +325,7 @@ const RadicalGraph = forwardRef(function RadicalGraph(
     simRef.current = sim
 
     return () => sim.stop()
-  }, [nodesById, edges, adjacency, filters.lang, filters.showAllRadicals])
+  }, [nodesById, edges, adjacency, filters.lang, filters.showAllRadicals, filters.levelFilter])
 
   // ---- redibujar (sin re-simular) cuando cambia la seleccion o las categorias activas ----
   useEffect(() => {

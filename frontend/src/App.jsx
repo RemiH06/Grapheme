@@ -13,6 +13,7 @@ export default function App() {
   const [filters, setFilters] = useState({
     lang: 'all',
     showAllRadicals: false,
+    levelFilter: 'core',
     activeCategories: new Set(CATEGORY_ORDER),
   })
   const [selectedId, setSelectedId] = useState(null)
