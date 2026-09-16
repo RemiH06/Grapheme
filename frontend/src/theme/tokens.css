@@ -1,18 +1,26 @@
+/*
+  Concepto: un sello de tinta carmin sobre una ficha de barro cocido.
+  El fondo entero es de la misma familia calida que el acento (que ya
+  existia como "tinta de sello" desde el primer borrador) en vez de
+  vivir sobre un gris neutro que le queda frio. El rojo del sello es
+  carmin saturado (hue ~350, ligeramente hacia magenta, nunca hacia
+  naranja) para que domine la paleta sin competir con ella.
+*/
 :root {
   color-scheme: light;
-  --bg: #eeece4;
-  --page: #e7e4da;
-  --surface: #f8f6f0;
-  --surface-2: #f1efe7;
-  --ink: #211d17;
-  --ink-soft: #58524a;
-  --muted: #8d8778;
-  --line: #dcd7c9;
-  --line-strong: #c7c1b0;
-  --accent: #a23a2c;
-  --accent-ink: #ffffff;
-  --accent-soft: rgba(162, 58, 44, 0.12);
-  --accent-soft-2: rgba(162, 58, 44, 0.22);
+  --page: #ebdad2;
+  --bg: #f1e2d9;
+  --surface: #f9f0ea;
+  --surface-2: #f2e2d8;
+  --ink: #2c1c17;
+  --ink-soft: #6d4d42;
+  --muted: #987d70;
+  --line: #dcc4b8;
+  --line-strong: #c8a798;
+  --accent: #a8102a;
+  --accent-ink: #fdeeef;
+  --accent-soft: rgba(168, 16, 42, 0.13);
+  --accent-soft-2: rgba(168, 16, 42, 0.28);
   --cat-human: #4a3aa7;
   --cat-body: #e34948;
   --cat-places: #2a78d6;
@@ -22,26 +30,26 @@
   --cat-objects: #1baf7a;
   --cat-life: #e87ba4;
   --cat-structural: #928c7d;
-  --edge: #c9c2ae;
-  --shadow: rgba(40, 30, 20, 0.14);
+  --edge: #c6a292;
+  --shadow: rgba(50, 26, 14, 0.18);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --bg: #17181a;
-    --page: #101112;
-    --surface: #1e2023;
-    --surface-2: #26282b;
-    --ink: #efece3;
-    --ink-soft: #bcb6a8;
-    --muted: #837d70;
-    --line: #34363a;
-    --line-strong: #43464a;
-    --accent: #e2694f;
-    --accent-ink: #1a1210;
-    --accent-soft: rgba(226, 105, 79, 0.16);
-    --accent-soft-2: rgba(226, 105, 79, 0.3);
+    --page: #14100d;
+    --bg: #1c1613;
+    --surface: #251d18;
+    --surface-2: #2d241e;
+    --ink: #f0e6dc;
+    --ink-soft: #c9ab98;
+    --muted: #93796a;
+    --line: #3a2d24;
+    --line-strong: #4a392e;
+    --accent: #e63950;
+    --accent-ink: #1c1613;
+    --accent-soft: rgba(230, 57, 80, 0.18);
+    --accent-soft-2: rgba(230, 57, 80, 0.32);
     --cat-human: #9085e9;
     --cat-body: #e66767;
     --cat-places: #3987e5;
@@ -51,8 +59,8 @@
     --cat-objects: #199e70;
     --cat-life: #d55181;
     --cat-structural: #85806f;
-    --edge: #3a3c40;
-    --shadow: rgba(0, 0, 0, 0.4);
+    --edge: #46311f;
+    --shadow: rgba(0, 0, 0, 0.45);
   }
 }
 
@@ -68,4 +76,14 @@ body {
   color: var(--ink);
   font-family: 'Zen Kaku Gothic New', 'Hiragino Sans', 'Yu Gothic', system-ui, sans-serif;
   overflow: hidden;
+}
+
+/* foco visible consistente en todo lo interactivo, con el acento del
+   tema en vez del outline default del navegador (o nada) */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

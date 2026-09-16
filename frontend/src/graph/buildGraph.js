@@ -56,13 +56,18 @@ export function buildGraph(raw) {
     nodesById.set(x.id, { id: x.id, glyph: x.glyph, kind: 'extra', x: null, y: null })
   }
 
+  // e.from = el componente (la pieza simple), e.to = lo que lo contiene
+  // (el radical o caracter compuesto). La direccion siempre va de lo
+  // simple a lo complejo.
   const edges = raw.edges.map((e) => ({ source: e.from, target: e.to, pos: e.pos, role: e.role }))
 
   const adjacency = new Map()
   for (const n of nodesById.values()) adjacency.set(n.id, [])
   for (const e of edges) {
-    adjacency.get(e.source).push({ id: e.target, role: e.role, pos: e.pos })
-    adjacency.get(e.target).push({ id: e.source, role: e.role, pos: e.pos })
+    // desde el nodo "to": esta es una de MIS piezas (direction: component)
+    adjacency.get(e.target).push({ id: e.source, role: e.role, pos: e.pos, direction: 'component' })
+    // desde el nodo "from": esto es algo de lo que YO soy pieza (direction: owner)
+    adjacency.get(e.source).push({ id: e.target, role: e.role, pos: e.pos, direction: 'owner' })
   }
   for (const n of nodesById.values()) n.degree = adjacency.get(n.id).length
 

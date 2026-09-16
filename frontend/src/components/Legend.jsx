@@ -16,10 +16,10 @@ export default function Legend({ filters, setFilters }) {
         const info = CATEGORY_INFO[key]
         const off = !filters.activeCategories.has(key)
         return (
-          <div key={key} className={`chip${off ? ' off' : ''}`} title={info.hint} onClick={() => toggle(key)}>
+          <button key={key} className={`chip${off ? ' off' : ''}`} title={info.hint} onClick={() => toggle(key)}>
             <span className="dot" style={{ background: `var(${info.varName})` }} />
             {info.label}
-          </div>
+          </button>
         )
       })}
     </div>

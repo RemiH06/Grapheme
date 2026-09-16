@@ -224,7 +224,40 @@ RADICAL_MEANING = {
 MERGE_INTO = {
     '⺅': '人', '𠆢': '人', '⺨': '犬', '⺡': '水', '⺣': '火',
     '⺖': '心', '⺘': '手', '⺭': '示', '⻂': '衣', '⺌': '小',
+    # Las mismas formas de arriba, pero con el codepoint Unicode que de
+    # verdad usan los datasets de descomposicion (bloque CJK Unified
+    # Ideographs / simplificado chino) en vez del bloque "CJK Radicals
+    # Supplement" que trae el Excel. Visualmente identicas, puntos de
+    # codigo distintos -- sin esto, 手/水/人/etc. quedaban "huerfanos"
+    # aunque en realidad si aparecen en cientos de compuestos.
+    '扌': '手', '氵': '水', '亻': '人', '忄': '心', '犭': '犬',
+    '礻': '示', '衤': '衣', '钅': '金', '釒': '金',
+    '艹': '⺾', '⺮': '竹', '罒': '⺲', '灬': '火',
+    '辶': '⻌', '⺼': '肉', '爫': '爪',
+    '丨': '｜', '丿': 'ノ', '乚': '乙', '彐': '彑',
+    '丬': '爿',
+    # Radicales simplificados en chino continental (distintos del
+    # tradicional que trae el Excel, pero la misma idea).
+    '讠': '言', '纟': '糸', '糹': '糸', '刂': '刀', '饣': '食', '飠': '食',
+    '韦': '韋',
+    # Omitidos en la primera pasada de fusiones (sesion anterior):
+    # ⺉ nunca se fusiono con 刀 como si paso con los demas "side forms".
+    '⺉': '刀',
+    # 戸 (puerta, forma japonesa, U+6238) vs 戶 tradicional (U+6236) y
+    # 户 simplificado (U+6237): mismo radical, tres codepoints distintos.
+    '户': '戸', '戶': '戸',
+    # 八 (el caracter real "ocho") vs ハ (la forma-trazo que trae el
+    # Excel): los datasets de descomposicion casi siempre usan 八.
+    '八': 'ハ',
+    # 老 (viejo, caracter completo) vs ⺹ (forma recortada de "corona"
+    # que trae el Excel).
+    '老': '⺹',
 }
+
+# El radical de "oreja" (阝) es ambiguo sin ver la posicion: a la
+# izquierda es 阜 (colina, ⻖ en el Excel), a la derecha es 邑 (ciudad,
+# ⻏). Se resuelve aparte en components_of(), no aqui.
+EAR_LEFT, EAR_RIGHT = '⻖', '⻏'
 
 # Base de una taxonomia de trazos: los radicales de 1 solo trazo son,
 # literalmente, los trazos fundamentales del sistema (bloque Unicode
@@ -326,6 +359,15 @@ def hsk_level_of(row):
     return int(m.group(1)) if m else None
 
 
+def _resolve_ear(glyph, pos):
+    """阝 es ambiguo sin posicion: izquierda = 阜 (colina), derecha =
+    邑 (ciudad). El resto de los componentes se resuelve via MERGE_INTO;
+    este es el unico que necesita ver la posicion para decidirse."""
+    if glyph != '阝':
+        return glyph
+    return EAR_LEFT if 'left' in pos else EAR_RIGHT
+
+
 def components_of(glyph, mmh_by_glyph, mega_by_glyph):
     """[(componente, posicion, rol)] para un caracter compuesto, o [] si
     es atomico. Prioriza Make Me a Hanzi (posicion real + rol
@@ -337,15 +379,30 @@ def components_of(glyph, mmh_by_glyph, mega_by_glyph):
         if leaves:
             etym = mmh.get('etymology') or {}
             phon, sem = etym.get('phonetic'), etym.get('semantic')
-            return [(g, pos, 'phon' if g == phon else 'sem') for g, pos in leaves]
+            return [(_resolve_ear(g, pos), pos, 'phon' if g == phon else 'sem') for g, pos in leaves]
     row = mega_by_glyph.get(glyph)
     if row:
         raw = row.get('decomposition2_with_radical', '') or ''
         parts = [p.strip() for p in raw.split(',') if p.strip() and p.strip() != 'No glyph available']
         parts = [p for p in parts if p != glyph]
         if len(parts) >= 2:
-            return [(p, 'component', 'sem') for p in parts]
+            return [(_resolve_ear(p, 'component'), 'component', 'sem') for p in parts]
     return []
+
+
+def is_pictographic(glyph, mmh_by_glyph):
+    """True si makemeahanzi marca este caracter como pictograma puro
+    (un dibujo de una sola pieza, ej. 木 water 水 fuego 火). Para esos,
+    el campo "decomposition" describe como se dibuja el glifo (trazos),
+    no de que partes semanticas esta hecho -- 木 "decompone" en 十+八
+    graficamente, pero eso no es un componente real para un estudiante.
+    Solo cuando el tipo es 'ideographic' o 'pictophonetic' (o no hay
+    etimologia registrada) confiamos en la descomposicion como real."""
+    mmh = mmh_by_glyph.get(glyph)
+    if not mmh:
+        return False
+    etym = mmh.get('etymology') or {}
+    return etym.get('type') == 'pictographic'
 
 
 def pct_rank(rank, worst_rank):
@@ -444,7 +501,7 @@ def build():
             node['hsk'] = zh_level
             node['freqJa'] = freq_ja
             node['freqZh'] = freq_zh
-            continue
+            continue  # ser radical no significa ser atomico -- ver mas abajo
 
         if not langs:
             continue  # ni joyo ni HSK (solo aparecio como fila de mega_hanzi sin nivel)
@@ -480,14 +537,28 @@ def build():
         extra_nodes[glyph] = {'id': eid, 'glyph': glyph}
         return eid
 
+    # Direccion: SIEMPRE de la pieza simple hacia lo que la contiene
+    # (componente -> compuesto), nunca al reves. Un radical no es
+    # automaticamente atomico solo por estar en la lista de 243: 色
+    # (color) es radical Y se descompone en 巴 real (⺈+巴, etimologia
+    # ideografica) -- si es un pictograma puro (木, 水, 火...) su
+    # "descomposicion" es solo la forma en que se dibuja el trazo, no
+    # componentes reales, y is_pictographic() la descarta.
     edges_final = []
-    for glyph in compound_order:
-        cid = compound_id_by_glyph[glyph]
-        for comp_glyph, pos, role in components_of(glyph, mmh_by_glyph, mega_by_glyph):
+
+    def add_edges_for(owner_glyph, owner_id):
+        for comp_glyph, pos, role in components_of(owner_glyph, mmh_by_glyph, mega_by_glyph):
             edges_final.append({
-                'from': cid, 'to': resolve_component_id(comp_glyph),
+                'from': resolve_component_id(comp_glyph), 'to': owner_id,
                 'pos': pos, 'role': role,
             })
+
+    for glyph in compound_order:
+        add_edges_for(glyph, compound_id_by_glyph[glyph])
+
+    for glyph, radical_id in radical_id_by_glyph.items():
+        if not is_pictographic(glyph, mmh_by_glyph):
+            add_edges_for(glyph, radical_id)
 
     return {
         'radicals': radicals_final,

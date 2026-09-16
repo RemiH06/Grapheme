@@ -12,6 +12,26 @@ function radiusOf(n) {
   return 3.4
 }
 
+/** Flecha componente -> contenedor, pegada al borde del nodo destino
+ * para no taparlo. Solo se dibuja en las aristas resaltadas (nodo
+ * seleccionado): con miles de aristas a la vez seria puro ruido. */
+function drawArrowhead(ctx, sx, sy, tx, ty, atRadius, size, color, k) {
+  const dx = tx - sx, dy = ty - sy
+  const len = Math.hypot(dx, dy) || 1
+  const ux = dx / len, uy = dy / len
+  const px = tx - ux * atRadius
+  const py = ty - uy * atRadius
+  const ang = Math.atan2(uy, ux)
+  const s = size / k
+  ctx.beginPath()
+  ctx.moveTo(px, py)
+  ctx.lineTo(px - s * Math.cos(ang - Math.PI / 6), py - s * Math.sin(ang - Math.PI / 6))
+  ctx.lineTo(px - s * Math.cos(ang + Math.PI / 6), py - s * Math.sin(ang + Math.PI / 6))
+  ctx.closePath()
+  ctx.fillStyle = color
+  ctx.fill()
+}
+
 const CORE_JLPT = new Set(['N5', 'N4', 'N3'])
 const CORE_HSK_MAX = 6
 
@@ -104,8 +124,14 @@ const RadicalGraph = forwardRef(function RadicalGraph(
       ctx.strokeStyle = touchesSel ? accent : edgeColor
       ctx.globalAlpha = selected ? (touchesSel ? 0.85 : 0.12) : 0.55
       ctx.lineWidth = (touchesSel ? 1.6 : 1) / view.k
+      if (touchesSel && e.role === 'phon') ctx.setLineDash([5 / view.k, 4 / view.k])
       ctx.stroke()
+      if (touchesSel) {
+        ctx.setLineDash([])
+        drawArrowhead(ctx, s.x, s.y, t.x, t.y, radiusOf(t) + 2, 7, accent, view.k)
+      }
     }
+    ctx.setLineDash([])
     ctx.globalAlpha = 1
 
     for (const n of activeNodesRef.current) {
@@ -324,6 +350,15 @@ const RadicalGraph = forwardRef(function RadicalGraph(
       .on('tick', () => drawRef.current())
     simRef.current = sim
 
+    // quien pidio menos movimiento no deberia ver 2000 nodos volando por
+    // 5 segundos cada vez que cambia un filtro: resolvemos el layout de
+    // una vez (sin animar) y dibujamos solo el resultado final.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      sim.stop()
+      for (let i = 0; i < 300; i++) sim.tick()
+      drawRef.current()
+    }
+
     return () => sim.stop()
   }, [nodesById, edges, adjacency, filters.lang, filters.showAllRadicals, filters.levelFilter])
 
@@ -352,7 +387,8 @@ const RadicalGraph = forwardRef(function RadicalGraph(
       <canvas ref={canvasRef} />
       <div className="hint">
         Arrastra el fondo para mover el mapa · rueda para zoom · arrastra un nodo para acomodarlo · clic para ver el
-        detalle
+        detalle · al seleccionar, la flecha va del componente hacia lo que lo contiene y las líneas punteadas son
+        conexiones fonéticas (mismo sonido, no mismo significado)
       </div>
       <div className="counts">
         {counts.radicals} radicales · {counts.compounds} caracteres · {counts.edges} conexiones

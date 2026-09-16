@@ -20,10 +20,12 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
   const notes = useNotes(node?.id, node?.glyph)
   if (!node) return <div className="panel" />
 
-  const conns = adjacency
-    .get(node.id)
-    .slice()
-    .sort((a, b) => (nodesById.get(b.id)?.degree || 0) - (nodesById.get(a.id)?.degree || 0))
+  const byDegreeDesc = (a, b) => (nodesById.get(b.id)?.degree || 0) - (nodesById.get(a.id)?.degree || 0)
+  const allConns = adjacency.get(node.id)
+  // "component": esto es una PIEZA de node (flecha componente -> node).
+  // "owner": node es pieza de ESTO (flecha node -> owner).
+  const components = allConns.filter((c) => c.direction === 'component').sort(byDegreeDesc)
+  const usedIn = allConns.filter((c) => c.direction === 'owner').sort(byDegreeDesc)
 
   return (
     <div className={`panel${node ? ' open' : ''}`}>
@@ -107,28 +109,23 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
           </div>
         )}
 
+        {components.length > 0 && (
+          <>
+            <div className="section-title">Se compone de ({components.length})</div>
+            <ConnList conns={components} nodesById={nodesById} onSelect={onSelect} />
+          </>
+        )}
+
         <div className="section-title">
-          {node.kind === 'radical' ? `Aparece en ${conns.length} carácter${conns.length === 1 ? '' : 'es'}` : `Componentes (${conns.length})`}
+          {usedIn.length === 0
+            ? 'No aparece en ningún otro carácter todavía'
+            : `Aparece en ${usedIn.length} carácter${usedIn.length === 1 ? '' : 'es'}`}
         </div>
-        <div className="conn-list">
-          {conns.length === 0 && (
-            <div className="empty-conn">Todavía no hay caracteres conectados a este nodo.</div>
-          )}
-          {conns.map((c, i) => {
-            const cn = nodesById.get(c.id)
-            if (!cn) return null
-            return (
-              <button className="conn-item" key={`${c.id}-${c.pos}-${i}`} onClick={() => onSelect(cn.id)}>
-                <span className="g">{cn.glyph}</span>
-                <span className="info">
-                  <div className="m">{cn.meaning || cn.glyph}</div>
-                  <div className="r">{[cn.onyomi, cn.kunyomi, cn.pinyin].filter(Boolean).join(' · ')}</div>
-                </span>
-                <span className="role-tag">{ROLE_LABEL[c.role] || ''}</span>
-              </button>
-            )
-          })}
-        </div>
+        {usedIn.length === 0 ? (
+          <div className="empty-conn">Es una hoja: nada lo usa como pieza en el catálogo actual.</div>
+        ) : (
+          <ConnList conns={usedIn} nodesById={nodesById} onSelect={onSelect} />
+        )}
 
         <div className="section-title">Notas personales</div>
         <div className="notes-box">
@@ -140,6 +137,27 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
           <div className="notes-status">{notes.status}</div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function ConnList({ conns, nodesById, onSelect }) {
+  return (
+    <div className="conn-list">
+      {conns.map((c, i) => {
+        const cn = nodesById.get(c.id)
+        if (!cn) return null
+        return (
+          <button className="conn-item" key={`${c.id}-${c.direction}-${c.pos}-${i}`} onClick={() => onSelect(cn.id)}>
+            <span className="g">{cn.glyph}</span>
+            <span className="info">
+              <div className="m">{cn.meaning || cn.glyph}</div>
+              <div className="r">{[cn.onyomi, cn.kunyomi, cn.pinyin].filter(Boolean).join(' · ')}</div>
+            </span>
+            <span className="role-tag">{ROLE_LABEL[c.role] || ''}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }
