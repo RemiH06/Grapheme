@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import { useGraphData } from './hooks/useGraphData'
 import { CATEGORY_ORDER } from './graph/constants'
@@ -33,6 +33,35 @@ export default function App() {
     }
     selectAndCenter(n.id, { center: true })
   }
+
+  // Atajos de teclado. "typing" evita que / o N secuestren lo que el
+  // usuario esta escribiendo en el buscador o en las notas; Esc si
+  // funciona siempre (primero cierra la boveda si esta abierta, luego
+  // quita el foco de lo que se este escribiendo, luego deselecciona).
+  useEffect(() => {
+    function onKeyDown(e) {
+      const active = document.activeElement
+      const typing = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')
+
+      if (e.key === 'Escape') {
+        if (vaultOpen) { setVaultOpen(false); return }
+        if (typing) active.blur()
+        setSelectedId(null)
+        return
+      }
+      if (typing || vaultOpen) return
+      if (e.key === '/') {
+        e.preventDefault()
+        document.querySelector('.search-wrap input')?.focus()
+        return
+      }
+      if ((e.key === 'n' || e.key === 'N') && selectedId) {
+        document.querySelector('.notes-box textarea')?.focus()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [selectedId, vaultOpen])
 
   if (error) {
     return (

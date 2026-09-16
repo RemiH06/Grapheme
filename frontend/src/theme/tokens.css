@@ -1,22 +1,21 @@
 /*
-  Concepto: un sello de tinta carmin sobre una ficha de barro cocido.
-  El fondo entero es de la misma familia calida que el acento (que ya
-  existia como "tinta de sello" desde el primer borrador) en vez de
-  vivir sobre un gris neutro que le queda frio. El rojo del sello es
-  carmin saturado (hue ~350, ligeramente hacia magenta, nunca hacia
-  naranja) para que domine la paleta sin competir con ella.
+  Concepto: un sello de tinta carmin sobre pizarra fria. Un gris sin
+  ningun sesgo de tono se lee como "no elegido" (pantalla apagada); un
+  gris con un empuje leve hacia azul/violeta se lee como una decision,
+  y ademas le da al carmin del sello un contraste calido/frio real en
+  vez de competir con un fondo de su misma familia.
 */
 :root {
   color-scheme: light;
-  --page: #ebdad2;
-  --bg: #f1e2d9;
-  --surface: #f9f0ea;
-  --surface-2: #f2e2d8;
-  --ink: #2c1c17;
-  --ink-soft: #6d4d42;
-  --muted: #987d70;
-  --line: #dcc4b8;
-  --line-strong: #c8a798;
+  --page: #e1e3e8;
+  --bg: #e8eaee;
+  --surface: #f6f7f9;
+  --surface-2: #eef0f3;
+  --ink: #1e2027;
+  --ink-soft: #565a63;
+  --muted: #83878f;
+  --line: #d1d4da;
+  --line-strong: #babec6;
   --accent: #a8102a;
   --accent-ink: #fdeeef;
   --accent-soft: rgba(168, 16, 42, 0.13);
@@ -30,24 +29,24 @@
   --cat-objects: #1baf7a;
   --cat-life: #e87ba4;
   --cat-structural: #928c7d;
-  --edge: #c6a292;
-  --shadow: rgba(50, 26, 14, 0.18);
+  --edge: #bdc1c8;
+  --shadow: rgba(20, 22, 30, 0.16);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --page: #14100d;
-    --bg: #1c1613;
-    --surface: #251d18;
-    --surface-2: #2d241e;
-    --ink: #f0e6dc;
-    --ink-soft: #c9ab98;
-    --muted: #93796a;
-    --line: #3a2d24;
-    --line-strong: #4a392e;
+    --page: #101116;
+    --bg: #16171d;
+    --surface: #1e2026;
+    --surface-2: #26282f;
+    --ink: #e6e8ed;
+    --ink-soft: #b1b5be;
+    --muted: #80848d;
+    --line: #2e313a;
+    --line-strong: #3d404a;
     --accent: #e63950;
-    --accent-ink: #1c1613;
+    --accent-ink: #14151a;
     --accent-soft: rgba(230, 57, 80, 0.18);
     --accent-soft-2: rgba(230, 57, 80, 0.32);
     --cat-human: #9085e9;
@@ -59,7 +58,7 @@
     --cat-objects: #199e70;
     --cat-life: #d55181;
     --cat-structural: #85806f;
-    --edge: #46311f;
+    --edge: #383b42;
     --shadow: rgba(0, 0, 0, 0.45);
   }
 }

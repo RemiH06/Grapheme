@@ -1,98 +1,96 @@
-# Atlas de Radicales
+[![Made with Python](https://forthebadge.com/images/badges/made-with-python.svg)](https://github.com/RemiH06/Grapheme)
+[![React](https://img.shields.io/badge/-React-61DAFB?style=for-the-badge&logo=react&logoColor=white)](https://github.com/RemiH06/Grapheme)
 
-Grafo interactivo que conecta los radicales kanji/hanzi con **todos** los
-kanji jōyō y hanzi HSK 3.0 que los usan, para estudiar japonés (JLPT) y
-chino (HSK) viendo qué componentes se repiten entre pictogramas. Nace de
-`docs/Pictograms.xlsx` (clasificación de radicales) más el catálogo
-completo de caracteres, armado a partir de datasets abiertos.
-
-## Estructura
-
-```
-docs/Pictograms.xlsx      # clasificacion de radicales (no se versiona, ver .gitignore)
-data/fetch_sources.py     # descarga y cachea los 3 datasets abiertos en data/sources/
-data/build_dataset.py     # Excel + data/sources/ -> backend/app/data/graph_data.json
-backend/                  # FastAPI: sirve el grafo + notas personales (SQLite)
-frontend/                 # React + Vite: el lienzo (canvas + d3-force)
+```ascii
+ ██████╗ ██████╗  █████╗ ██████╗ ██╗  ██╗███████╗███╗   ███╗███████╗
+██╔════╝ ██╔══██╗██╔══██╗██╔══██╗██║  ██║██╔════╝████╗ ████║██╔════╝
+██║  ███╗██████╔╝███████║██████╔╝███████║█████╗  ██╔████╔██║█████╗  
+██║   ██║██╔══██╗██╔══██║██╔═══╝ ██╔══██║██╔══╝  ██║╚██╔╝██║██╔══╝  
+╚██████╔╝██║  ██║██║  ██║██║     ██║  ██║███████╗██║ ╚═╝ ██║███████╗
+ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝╚══════╝
+        by Hex (@RemiH06)          version 0.1
 ```
 
-No usa una base de datos de grafos (Neo4j, etc.): el dataset completo
-(243 radicales + 3688 caracteres + ~330 componentes fonéticos, ~7200
-aristas) pesa unos pocos MB y vive en un JSON estático, generado una
-vez con `build_dataset.py`. Lo único que necesita persistencia real en
-tiempo de ejecución son las notas personales por nodo, guardadas en un
-archivo SQLite.
+[![AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge)](LICENSE)
 
-## Qué cubre el catálogo
+## Overview
 
-- **2136 kanji jōyō** completos (todos), con JLPT, grado escolar y
-  frecuencia real de uso.
-- **3000 hanzi HSK 3.0** completos (niveles 1 a 9), con pinyin y
-  frecuencia real de uso.
-- Descomposición en componentes para ambos (con posición y, cuando se
-  sabe, si el componente aporta significado o solo suena — la mayoría
-  de los caracteres chinos son fono-semánticos).
-- El campo **"qué tan común"** (0-100%) es un percentil calculado sobre
-  un ranking de frecuencia real de corpus — no un número inventado, y
-  japonés/chino usan cada uno su propia escala (no son comparables
-  1 a 1 entre sí, son corpus distintos).
-- Por defecto el grafo solo muestra JLPT N5–N3 y HSK 1–6 (lo que de
-  verdad se estudia para certificarse); hay un botón para revelar todo
-  el catálogo (N2/N1, HSK 7-9).
+### General Description
 
-**Límite conocido**: unos 194 kanji jōyō en su forma *shinjitai*
-(simplificación específica de Japón, ej. 図 対 労 営 実) no tienen
-descomposición todavía — las fuentes usadas son de origen chino y no
-siempre cubren esas formas. Quedan como nodos con lectura/significado
-pero sin aristas hacia radicales.
+**Grapheme** conecta los 243 radicales kanji/hanzi con el catálogo
+completo de kanji jōyō (2136) y hanzi HSK 3.0 (3000) en un solo grafo,
+para estudiar japonés (JLPT) y chino (HSK) viendo qué componentes
+comparten los caracteres entre sí. Nace de una clasificación de
+radicales hecha a mano en Excel (`docs/Pictograms.xlsx`), ampliada con
+tres datasets abiertos para cubrir lecturas, frecuencia real de uso y
+descomposición de cada carácter — ver `docs/METODOLOGIA.md` para el
+detalle completo de qué dato sale de dónde.
 
-### Fuentes de datos (todas de licencia abierta)
+El grafo es dirigido (componente → carácter que lo contiene) y
+distingue conexiones semánticas de fonéticas — la mayoría de los hanzi
+son compuestos fono-semánticos, y confundir "suena igual" con
+"significa algo relacionado" es un error común al aprender. Corre
+completamente local: un backend FastAPI sirve el grafo estático y
+guarda notas personales por nodo en SQLite; el frontend es un lienzo
+canvas + d3-force en React.
 
-| Dataset | Para qué | Licencia |
-|---|---|---|
-| [kanji-data](https://github.com/davidluzgouveia/kanji-data) | Los 2136 kanji jōyō: JLPT, grado, frecuencia, lecturas | MIT |
-| [chinese-hsk-and-frequency-lists](https://github.com/alyssabedard/chinese-hsk-and-frequency-lists) | Hanzi HSK 3.0, frecuencia real (Jun Da), descomposición | MIT / CC BY-SA 4.0 |
-| [makemeahanzi](https://github.com/skishore/makemeahanzi) | Descomposición posicional + rol semántico/fonético | MIT |
-
-## Correrlo
-
-**1. Generar el dataset** (solo hace falta de nuevo si editas
-`docs/Pictograms.xlsx`; los datasets externos se cachean una sola vez):
-
-```bash
-cd data
-pip install openpyxl
-python fetch_sources.py   # descarga ~6 MB, una sola vez
-python build_dataset.py
+```diff
+- ~194 kanji jōyō en su forma shinjitai (図, 対, 労...) todavía no tienen descomposición: las tres fuentes usadas son de origen chino y no cubren esa simplificación específica de Japón.
+- El grafo completo (~4265 nodos) es denso a simple vista sin filtrar; por default solo se muestra JLPT N5-N3 + HSK 1-6.
 ```
 
-**2. Backend** (puerto 8055):
+## Installation
 
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8055
-```
+1. Generar el dataset (descarga ~6 MB de datasets abiertos la primera vez):
+   ```bash
+   cd data
+   pip install openpyxl
+   python fetch_sources.py
+   python build_dataset.py
+   ```
+2. Levantar el backend (puerto 8055):
+   ```bash
+   cd backend
+   pip install -r requirements.txt
+   uvicorn app.main:app --reload --port 8055
+   ```
+3. Levantar el frontend (puerto 5190):
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+4. Abrir `http://localhost:5190`.
 
-**3. Frontend** (puerto 5190):
+## Features
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+- Grafo interactivo (canvas + d3-force) de 243 radicales, 3685
+  caracteres y ~7400 aristas dirigidas.
+- Distingue conexiones semánticas de fonéticas (línea sólida vs.
+  punteada) con flecha componente → contenedor al seleccionar un nodo.
+- Filtro por idioma (japonés / chino / ambos) y por nivel (JLPT N5-N3
+  + HSK 1-6 por default; catálogo completo con un toggle).
+- Leyenda de categorías semánticas (Humano, Cuerpo, Naturaleza...),
+  togglable por categoría.
+- Búsqueda por glifo, lectura o significado.
+- Panel de detalle: lecturas, significado, qué tan común es (percentil
+  de frecuencia real de corpus, no inventado), de qué se compone un
+  carácter y en cuáles otros aparece.
+- Notas personales por nodo, persistentes en SQLite.
+- Modo claro/oscuro automático, con paleta neutra y un solo acento de
+  color.
 
-Abre http://localhost:5190.
+## Future Features
 
-## Ampliar o corregir el catálogo
+- Recuperar el sistema de nivel/mnemónico del Excel original (ver
+  `steps.md`): existía una progresión de aprendizaje pensada a mano
+  que se perdió al conectar el catálogo externo.
+- Descomposición para los ~194 kanji shinjitai restantes, si aparece
+  una fuente japonesa dedicada (KRADFILE/RADKFILE).
+- Un modo de estudio tipo tarjetas con repetición espaciada sobre el
+  mismo grafo: que rastree qué símbolos ya se conocen, quizás con
+  lectura en voz alta (Web Speech API) o escritura del significado.
 
-El catálogo de caracteres ya no se edita a mano: sale completo de
-`data/fetch_sources.py` + `data/build_dataset.py`. Para agregar
-información que falte (por ejemplo, decomposición para los ~194
-shinjitai sin cubrir), lo natural es sumar una fuente más en
-`fetch_sources.py` y un paso de resolución en `components_of()` dentro
-de `build_dataset.py`, en vez de tipear caracteres sueltos.
+## Autoría
 
-Los 243 **radicales** sí siguen viniendo de `docs/Pictograms.xlsx` y de
-los diccionarios `RADICAL_MEANING` / `STROKE_TYPES` en
-`build_dataset.py` — esos sí se editan a mano ahí.
+por Hex ([@RemiH06](https://github.com/RemiH06))
