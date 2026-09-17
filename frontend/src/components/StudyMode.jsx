@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { fetchDueCards, reviewCard } from '../api/client'
 import { CATEGORY_INFO } from '../graph/constants'
 import { checkMeaning } from '../utils/quiz'
-import { canSpeak, preferredLang, speak } from '../utils/speech'
+import { canSpeak, hasReading, preferredLang, speak } from '../utils/speech'
 
 const GRADES = [
   { grade: 0, label: 'Otra vez' },
@@ -121,7 +121,7 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
             </div>
             <div className="study-glyph">{node.glyph}</div>
 
-            {canSpeak() && (
+            {canSpeak() && hasReading(node) && (
               <button className="study-speak" onClick={speakNode} title="Leer en voz alta">
                 🔊 Escuchar
               </button>
@@ -185,6 +185,7 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
                       <span className="val">{node.pinyin}</span>
                     </div>
                   )}
+                  {!hasReading(node) && <div className="empty-conn">No tiene una pronunciación propia registrada.</div>}
                 </div>
                 <div className="study-grades">
                   {GRADES.map((g) => (

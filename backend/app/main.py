@@ -1,5 +1,5 @@
 """
-API de Atlas de Radicales.
+API de Grapheme.
 
 Sirve el grafo estatico (radicales, caracteres compuestos, aristas,
 generado por data/build_dataset.py a partir de Pictograms.xlsx) y las
@@ -25,7 +25,7 @@ from . import db
 DATA_PATH = Path(__file__).resolve().parent / "data" / "graph_data.json"
 
 app = FastAPI(
-    title="Atlas de Radicales API",
+    title="Grapheme API",
     description="Grafo de radicales kanji/hanzi y notas personales por nodo",
     version="1.0.0",
 )
@@ -55,7 +55,7 @@ def startup():
 
 @app.get("/")
 def root():
-    return {"name": "Atlas de Radicales API", "status": "ok", "docs": "/docs"}
+    return {"name": "Grapheme API", "status": "ok", "docs": "/docs"}
 
 
 @app.get("/graph")

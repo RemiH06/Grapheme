@@ -9,6 +9,13 @@ export function canSpeak() {
   return typeof window !== 'undefined' && 'speechSynthesis' in window
 }
 
+/** true si el nodo tiene alguna lectura real registrada (on'yomi,
+ * kun'yomi o pinyin). Sin esto no sabemos como se pronuncia de verdad,
+ * asi que no tiene sentido ofrecer el boton de leer en voz alta. */
+export function hasReading(node) {
+  return !!(node?.onyomi || node?.kunyomi || node?.pinyin)
+}
+
 /** lang: 'ja-JP' | 'zh-CN' (BCP-47). Corta cualquier lectura anterior
  * antes de empezar una nueva, para que no se encimen. */
 export function speak(text, lang) {

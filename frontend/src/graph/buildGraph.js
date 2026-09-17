@@ -53,7 +53,16 @@ export function buildGraph(raw) {
     })
   }
   for (const x of raw.extras) {
-    nodesById.set(x.id, { id: x.id, glyph: x.glyph, kind: 'extra', x: null, y: null })
+    nodesById.set(x.id, {
+      id: x.id,
+      glyph: x.glyph,
+      kind: 'extra',
+      meaning: x.meaning,
+      pinyin: x.pinyin,
+      isExample: !!x.isExample,
+      x: null,
+      y: null,
+    })
   }
 
   // e.from = el componente (la pieza simple), e.to = lo que lo contiene

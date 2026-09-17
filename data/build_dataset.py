@@ -261,6 +261,11 @@ MERGE_INTO = {
     '覀': '西',
     # ⺍ variante de "pequeno" que usa KanjiVG, distinta de la ⺌ del Excel.
     '⺍': '小',
+    # 齐 (simplificado, HSK real) vs 齊 (tradicional, radical del Excel):
+    # mismo caracter, mismo caso que 讲/言 o 户/戶 de arriba. Sin esto, 齊
+    # quedaba aislado del grafo aunque 济/剂/挤 (HSK) sí lo usan como
+    # fonetico -- solo que codificado como 齐, no como 齊.
+    '齐': '齊',
 }
 
 # El radical de "oreja" (阝) es ambiguo sin ver la posicion: a la
@@ -460,6 +465,28 @@ def is_pictographic(glyph, mmh_by_glyph):
     return etym.get('type') == 'pictographic'
 
 
+def pick_illustrative_example(glyph, mega_by_glyph):
+    """Para un radical que quedo totalmente aislado (ni entrada ni salida):
+    busca en el campo component_in de mega_hanzi un compuesto real (aunque
+    quede fuera del catalogo jouyou/HSK) que SI lo use, para no dejarlo
+    como una isla sin ninguna conexion. None si mega_hanzi no tiene fila
+    para este radical o su component_in viene vacio."""
+    row = mega_by_glyph.get(glyph)
+    if not row:
+        return None
+    raw = row.get('component_in', '') or ''
+    candidates = [c.strip() for c in raw.split(',') if c.strip() and c.strip() != glyph]
+    best = None
+    for c in candidates:
+        crow = mega_by_glyph.get(c)
+        meaning = crow and (crow.get('meaning_junda') or crow.get('cc_cedict_definitions'))
+        if meaning:
+            return c, crow
+        if best is None:
+            best = (c, crow)
+    return best
+
+
 def pct_rank(rank, worst_rank):
     """Percentil 0-100 dentro de SU PROPIO corpus (japones y chino no son
     comparables entre si en una sola escala; cada uno usa su propio rango
@@ -615,6 +642,33 @@ def build():
     for glyph, radical_id in radical_id_by_glyph.items():
         if not is_pictographic(glyph, mmh_by_glyph):
             add_edges_for(glyph, radical_id)
+
+    # Un puñado de radicales canonicos (韭, 鹵, 黽, 鼎, 鼠, 龠...) son
+    # pictogramas puros legitimos -- igual que 木/水/火 -- pero ademas no
+    # aparecen como componente de NINGUN caracter jouyou/HSK real, asi que
+    # quedan como islas totales (ni entrada ni salida). La exclusion de
+    # descomposicion sigue siendo correcta; para que no parezcan un nodo
+    # roto se les agrega UNA arista de ejemplo hacia un compuesto real
+    # (aunque quede fuera del catalogo oficial) usando component_in de
+    # mega_hanzi. Si mega_hanzi no tiene ni eso (ej. 鹵, 黽), se quedan
+    # aislados de verdad -- no hay ninguna fuente con un ejemplo real.
+    touched = {e['from'] for e in edges_final} | {e['to'] for e in edges_final}
+    for glyph, radical_id in radical_id_by_glyph.items():
+        if radical_id in touched:
+            continue
+        pick = pick_illustrative_example(glyph, mega_by_glyph)
+        if not pick:
+            continue
+        example_glyph, example_row = pick
+        example_id = resolve_component_id(example_glyph)
+        resolved_glyph = MERGE_INTO.get(example_glyph, example_glyph)
+        if resolved_glyph in extra_nodes:
+            extra_nodes[resolved_glyph].update({
+                'meaning': example_row.get('meaning_junda') or example_row.get('cc_cedict_definitions'),
+                'pinyin': example_row.get('pinyin'),
+                'isExample': True,
+            })
+        edges_final.append({'from': radical_id, 'to': example_id, 'pos': 'example', 'role': 'sem'})
 
     return {
         'radicals': radicals_final,

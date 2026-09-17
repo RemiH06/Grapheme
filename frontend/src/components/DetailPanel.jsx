@@ -3,7 +3,7 @@ import { addManyToStudy } from '../api/client'
 import { CATEGORY_INFO, ROLE_LABEL } from '../graph/constants'
 import { useNotes } from '../hooks/useNotes'
 import { useStudyStar } from '../hooks/useStudyStar'
-import { canSpeak, preferredLang, speak } from '../utils/speech'
+import { canSpeak, hasReading, preferredLang, speak } from '../utils/speech'
 
 function kindLine(n) {
   if (n.kind === 'radical') {
@@ -17,6 +17,7 @@ function kindLine(n) {
     if (n.langs.includes('zh')) return 'Hanzi compuesto'
     return 'Carácter compuesto'
   }
+  if (n.isExample) return 'Ejemplo real, fuera del catálogo oficial (jōyō/HSK)'
   return 'Componente fonético (fuera de la lista de radicales)'
 }
 
@@ -36,6 +37,9 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
   // "owner": node es pieza de ESTO (flecha node -> owner).
   const components = allConns.filter((c) => c.direction === 'component').sort(byDegreeDesc)
   const usedIn = allConns.filter((c) => c.direction === 'owner').sort(byDegreeDesc)
+  const showJa = langFilter !== 'zh'
+  const showZh = langFilter !== 'ja'
+  const nodeHasReading = hasReading(node)
 
   return (
     <div className={`panel${node ? ' open' : ''}`}>
@@ -47,7 +51,7 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
             {node.meaning || (node.kind === 'extra' ? '(componente sin ficha propia todavía)' : '—')}
           </div>
         </div>
-        {canSpeak() && (
+        {canSpeak() && nodeHasReading && (
           <button
             className="panel-speak"
             title="Leer en voz alta"
@@ -72,25 +76,25 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
               {CATEGORY_INFO[node.category].label}
             </span>
           )}
-          {node.jlpt && <span className="badge">JLPT {node.jlpt}</span>}
-          {node.hsk && <span className="badge">HSK {node.hsk}</span>}
+          {showJa && node.jlpt && <span className="badge">JLPT {node.jlpt}</span>}
+          {showZh && node.hsk && <span className="badge">HSK {node.hsk}</span>}
           {node.isCharacter && <span className="badge">También se usa solo</span>}
         </div>
 
         <div className="readings">
-          {node.onyomi && (
+          {showJa && node.onyomi && (
             <div className="reading-row">
               <span className="label">On'yomi</span>
               <span className="val">{node.onyomi}</span>
             </div>
           )}
-          {node.kunyomi && (
+          {showJa && node.kunyomi && (
             <div className="reading-row">
               <span className="label">Kun'yomi</span>
               <span className="val">{node.kunyomi}</span>
             </div>
           )}
-          {node.pinyin && (
+          {showZh && node.pinyin && (
             <div className="reading-row">
               <span className="label">Pinyin</span>
               <span className="val">{node.pinyin}</span>
@@ -102,13 +106,14 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
               <span className="val">{node.strokeTypeName}</span>
             </div>
           )}
+          {!nodeHasReading && <div className="empty-conn">No tiene una pronunciación propia registrada.</div>}
         </div>
 
-        {(node.freqJa != null || node.freqZh != null) && (
+        {((showJa && node.freqJa != null) || (showZh && node.freqZh != null)) && (
           <div style={{ marginBottom: 16 }}>
             <div className="section-title">Qué tan común es</div>
-            {node.freqJa != null && <FreqBar label="En japonés" pct={node.freqJa} />}
-            {node.freqZh != null && <FreqBar label="En chino" pct={node.freqZh} />}
+            {showJa && node.freqJa != null && <FreqBar label="En japonés" pct={node.freqJa} />}
+            {showZh && node.freqZh != null && <FreqBar label="En chino" pct={node.freqZh} />}
           </div>
         )}
 
@@ -138,7 +143,7 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
               Se compone de ({components.length})
               <AddAllButton conns={components} nodesById={nodesById} onDone={onStudyChange} />
             </div>
-            <ConnList conns={components} nodesById={nodesById} onSelect={onSelect} />
+            <ConnList conns={components} nodesById={nodesById} onSelect={onSelect} showJa={showJa} showZh={showZh} />
           </>
         )}
 
@@ -151,7 +156,7 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
         {usedIn.length === 0 ? (
           <div className="empty-conn">Es una hoja: nada lo usa como pieza en el catálogo actual.</div>
         ) : (
-          <ConnList conns={usedIn} nodesById={nodesById} onSelect={onSelect} />
+          <ConnList conns={usedIn} nodesById={nodesById} onSelect={onSelect} showJa={showJa} showZh={showZh} />
         )}
 
         <div className="section-title">Notas personales</div>
@@ -186,20 +191,21 @@ function AddAllButton({ conns, nodesById, onDone }) {
   )
 }
 
-function ConnList({ conns, nodesById, onSelect }) {
+function ConnList({ conns, nodesById, onSelect, showJa = true, showZh = true }) {
   return (
     <div className="conn-list">
       {conns.map((c, i) => {
         const cn = nodesById.get(c.id)
         if (!cn) return null
+        const readings = [showJa && cn.onyomi, showJa && cn.kunyomi, showZh && cn.pinyin].filter(Boolean)
         return (
           <button className="conn-item" key={`${c.id}-${c.direction}-${c.pos}-${i}`} onClick={() => onSelect(cn.id)}>
             <span className="g">{cn.glyph}</span>
             <span className="info">
               <div className="m">{cn.meaning || cn.glyph}</div>
-              <div className="r">{[cn.onyomi, cn.kunyomi, cn.pinyin].filter(Boolean).join(' · ')}</div>
+              <div className="r">{readings.join(' · ')}</div>
             </span>
-            <span className="role-tag">{ROLE_LABEL[c.role] || ''}</span>
+            <span className="role-tag">{c.pos === 'example' ? 'ejemplo real' : ROLE_LABEL[c.role] || ''}</span>
           </button>
         )
       })}

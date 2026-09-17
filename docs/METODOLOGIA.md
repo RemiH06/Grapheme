@@ -44,6 +44,12 @@ Caso especial: **阝** (oreja) es ambiguo sin ver la posición — a la
 izquierda es 阜 (colina), a la derecha es 邑 (ciudad). Se resuelve en
 `_resolve_ear()` viendo si la posición del componente dice "left" o no.
 
+Mismo mecanismo para pares tradicional/simplificado que son el mismo
+radical con dos codepoints (ej. `讲`→言, `户`→戸): el más reciente es
+**齐→齊** — 济/剂/挤 (HSK) usan 齐 como fonético, pero el radical del
+Excel es la forma tradicional 齊. Sin el merge, 齊 quedaba totalmente
+aislado del grafo (ver sección 7).
+
 ## 3. El catálogo completo de caracteres (2136 jōyō + 3000 HSK)
 
 Tres datasets abiertos, descargados una sola vez por
@@ -106,6 +112,28 @@ correcto que se quede así — makemeahanzi clasifica su etimología como
 `is_pictographic()` lo protege igual que a 木 o 水. No es un hueco de
 cobertura, es la regla funcionando como debe.
 
+### 4.1 Radicales pictográficos sin ningún compuesto real en el catálogo
+
+Que `is_pictographic()` proteja correctamente a un radical de una
+descomposición falsa no significa que ese radical tenga uso real en el
+catálogo jōyō+HSK: 韭, 鹵, 黽, 鼎, 鼠 y 龠 son radicales Kangxi legítimos
+(misma categoría que 木/水/火/人/口), pero a diferencia de esos, no
+aparecen como componente de NINGÚN carácter jōyō/HSK — quedaban como
+nodos totalmente aislados (ni una arista, ni entrante ni saliente), lo
+que en el lienzo se ve indistinguible de un nodo roto.
+
+`pick_illustrative_example()` en `build_dataset.py` les agrega **una**
+arista de ejemplo hacia un compuesto real (aunque quede fuera del
+catálogo oficial 2136+3000), usando el campo `component_in` que
+mega_hanzi ya trae por cada radical/carácter — ej. 韭 → 谶 ("prophecy/
+omen"), 鼎 → 鼐 ("incense tripod"). Ese nodo extra se marca
+`isExample: true` y se etiqueta "ejemplo real" en la UI (en vez de
+"significado"/"fonético") para dejar claro que es una ilustración fuera
+del alcance oficial del proyecto, no un carácter jōyō/HSK más. Si
+mega_hanzi no tiene ni siquiera una fila para el radical (caso de 鹵 y
+黽), no hay ningún ejemplo que agregar — se quedan aislados de verdad,
+por falta total de datos, no por una regla mal aplicada.
+
 ## 5. Dirección de las aristas y rol semántico/fonético
 
 Cada arista va **del componente hacia lo que lo contiene** (nunca al
@@ -140,17 +168,20 @@ corpus — no un número inventado, y japonés/chino no son comparables
   kanji jōyō en forma *shinjitai* (図, 対, 労, 営, 実...) que las
   fuentes chinas no cubrían quedó resuelto al agregar KanjiVG como
   tercer nivel de respaldo en `components_of()` (sección 3).
-- **Radicales sin ninguna arista de entrada: 10** (de 242) — todos
-  verificados como correctos, no como huecos:
+- **Radicales totalmente aislados (ni una arista, entrante ni
+  saliente): 5** (de 242) — todos verificados como correctos, no como
+  huecos, y sin ningún dato en ninguna de las cuatro fuentes que
+  permita conectarlos a nada:
   - マ, ユ: marcadores mnemotécnicos propios (no son radicales Unicode
     reales, no hay fuente externa que pueda cubrirlos).
   - ヨ: variante rara de "hocico de cerdo", sin uso como componente en
     el catálogo actual.
-  - 韭, 鹵, 黽, 鼎, 鼠, 齊: radicales clásicos Kangxi legítimos pero muy
-    raros, que ninguna de las cuatro fuentes usa como componente de
-    otro carácter en el catálogo jōyō+HSK actual.
-  - 龠: exclusión deliberada y correcta por etimología `pictographic`
-    (ver sección 4, caso de verificación) — no un hueco de cobertura.
+  - 鹵, 黽: radicales Kangxi legítimos pero tan raros que mega_hanzi ni
+    siquiera trae una fila propia para ellos (ver sección 4.1) — a
+    diferencia de 韭/鼎/鼠/龠, que sí tienen una arista de ejemplo hacia
+    un compuesto real fuera de catálogo.
+  - 齊 dejó de estar aislado: se fusionó con su forma simplificada 齐
+    (sección 2), que sí es HSK 3 y aparece en 济/剂/挤.
 - **111 de 242 radicales sin categoría semántica**: así estaba tu
   matriz original, nunca se completó.
 - **Tier / nombres de nivel del Excel**: parseados parcialmente,

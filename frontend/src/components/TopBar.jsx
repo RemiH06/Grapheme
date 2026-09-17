@@ -38,7 +38,7 @@ export default function TopBar({ nodesById, filters, setFilters, onSelectSearch,
     <div className="topbar">
       <div className="brand">
         <span className="mark">部</span>
-        <span className="word">Atlas de Radicales</span>
+        <span className="word">Grapheme</span>
       </div>
 
       <div className="search-wrap" ref={wrapRef}>
