@@ -280,12 +280,12 @@ EAR_LEFT, EAR_RIGHT = '⻖', '⻏'
 # Los radicales de 2+ trazos (十, 又, 工...) no se etiquetan aqui todavia:
 # requieren datos reales de ORDEN de trazo (ej. KanjiVG) para no adivinar.
 STROKE_TYPES = {
-    '一': ('heng', '横 (héng) — horizontal'),
-    '｜': ('shu', '竖 (shù) — vertical'),
-    '丶': ('dian', '点 (diǎn) — punto'),
-    'ノ': ('pie', '撇 (piě) — caída a la izquierda'),
-    '乙': ('zhe', '折 (zhé) — trazo quebrado/curvo'),
-    '亅': ('gou', '钩 (gōu) — gancho'),
+    '一': ('heng', '横 (héng): horizontal'),
+    '｜': ('shu', '竖 (shù): vertical'),
+    '丶': ('dian', '点 (diǎn): punto'),
+    'ノ': ('pie', '撇 (piě): caída a la izquierda'),
+    '乙': ('zhe', '折 (zhé): trazo quebrado/curvo'),
+    '亅': ('gou', '钩 (gōu): gancho'),
 }
 
 # ---------------------------------------------------------------------------

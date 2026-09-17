@@ -6,7 +6,7 @@ function normalize(s) {
     .replace(/[̀-ͯ]/g, '')
 }
 
-// Los significados vienen como "love; affection" o "to become tired, weary" —
+// Los significados vienen como "love; affection" o "to become tired, weary":
 // se compara contra cada parte por separado y se acepta contención en
 // cualquier sentido para tolerar respuestas parciales ("tired" vs.
 // "to become tired").

@@ -1,0 +1,13 @@
+INFO:     Started server process [20856]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8055 (Press CTRL+C to quit)
+INFO:     127.0.0.1:56734 - "GET /graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57524 - "GET /graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57525 - "GET /study/due HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62384 - "GET /graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62386 - "GET /study/due HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49719 - "GET /notes/c00028 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49720 - "GET /study/c00028 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49724 - "GET /graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59208 - "GET / HTTP/1.1" 200 OK

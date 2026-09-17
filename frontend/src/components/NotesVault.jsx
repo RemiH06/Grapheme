@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchAllNotes } from '../api/client'
+import { BookmarkIcon, CloseIcon } from './icons'
 
 export default function NotesVault({ open, onClose, nodesById, onSelect }) {
   const [rows, setRows] = useState(null)
@@ -16,9 +17,11 @@ export default function NotesVault({ open, onClose, nodesById, onSelect }) {
     <div className={`modal-backdrop${open ? ' open' : ''}`} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-head">
-          <h2>🔖 Bóveda de notas</h2>
-          <button className="panel-close" onClick={onClose}>
-            ✕
+          <h2>
+            <BookmarkIcon size={17} /> Bóveda de notas
+          </h2>
+          <button className="panel-close" aria-label="Cerrar" onClick={onClose}>
+            <CloseIcon />
           </button>
         </div>
         <div className="modal-body">

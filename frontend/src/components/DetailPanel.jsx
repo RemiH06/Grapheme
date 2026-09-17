@@ -4,6 +4,7 @@ import { CATEGORY_INFO, ROLE_LABEL } from '../graph/constants'
 import { useNotes } from '../hooks/useNotes'
 import { useStudyStar } from '../hooks/useStudyStar'
 import { canSpeak, hasReading, preferredLang, speak } from '../utils/speech'
+import { CheckIcon, CloseIcon, SoundIcon, StarIcon } from './icons'
 
 function kindLine(n) {
   if (n.kind === 'radical') {
@@ -21,6 +22,20 @@ function kindLine(n) {
   return 'Componente fonético (fuera de la lista de radicales)'
 }
 
+/** Con el filtro de idioma activo, oculta conexiones exclusivas del
+ * OTRO idioma (ej. no mostrar hanzi-solo en "aparece en" con 日本語
+ * activo). Los radicales/trazos sin idioma propio (ni lectura ni
+ * JLPT/HSK) y los compartidos entre ambos siempre se muestran. */
+function matchesLangFilter(n, langFilter) {
+  if (langFilter === 'all' || !n) return true
+  if (n.kind === 'compound') return n.langs.includes(langFilter)
+  const hasJa = !!(n.onyomi || n.kunyomi || n.jlpt)
+  const hasZh = !!(n.pinyin || n.hsk)
+  if (!hasJa && !hasZh) return true
+  if (hasJa && hasZh) return true
+  return langFilter === 'ja' ? hasJa : hasZh
+}
+
 export default function DetailPanel({ node, nodesById, adjacency, onClose, onSelect, onStudyChange, langFilter }) {
   const notes = useNotes(node?.id, node?.glyph)
   const star = useStudyStar(node?.id, node?.glyph)
@@ -33,10 +48,11 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
 
   const byDegreeDesc = (a, b) => (nodesById.get(b.id)?.degree || 0) - (nodesById.get(a.id)?.degree || 0)
   const allConns = adjacency.get(node.id)
+  const inLangFilter = (c) => matchesLangFilter(nodesById.get(c.id), langFilter)
   // "component": esto es una PIEZA de node (flecha componente -> node).
   // "owner": node es pieza de ESTO (flecha node -> owner).
-  const components = allConns.filter((c) => c.direction === 'component').sort(byDegreeDesc)
-  const usedIn = allConns.filter((c) => c.direction === 'owner').sort(byDegreeDesc)
+  const components = allConns.filter((c) => c.direction === 'component' && inLangFilter(c)).sort(byDegreeDesc)
+  const usedIn = allConns.filter((c) => c.direction === 'owner' && inLangFilter(c)).sort(byDegreeDesc)
   const showJa = langFilter !== 'zh'
   const showZh = langFilter !== 'ja'
   const nodeHasReading = hasReading(node)
@@ -48,26 +64,27 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
         <div className="panel-titles">
           <div className="panel-kind">{kindLine(node)}</div>
           <div className="panel-meaning">
-            {node.meaning || (node.kind === 'extra' ? '(componente sin ficha propia todavía)' : '—')}
+            {node.meaning || (node.kind === 'extra' ? '(componente sin ficha propia todavía)' : 'Sin significado registrado')}
           </div>
         </div>
         {canSpeak() && nodeHasReading && (
           <button
             className="panel-speak"
             title="Leer en voz alta"
+            aria-label="Leer en voz alta"
             onClick={() => speak(node.glyph, preferredLang(node, langFilter))}
           >
-            🔊
+            <SoundIcon />
           </button>
         )}
-        <button className="panel-close" onClick={onClose}>
-          ✕
+        <button className="panel-close" aria-label="Cerrar" onClick={onClose}>
+          <CloseIcon />
         </button>
       </div>
 
       <div className="panel-body">
         <button className={`study-star${star.inStudy ? ' on' : ''}`} onClick={toggleStar} style={{ marginBottom: 14 }}>
-          {star.inStudy ? '★ En mi lista de estudio' : '☆ Agregar a mi lista de estudio'}
+          <StarIcon size={14} filled={star.inStudy} /> {star.inStudy ? 'En mi lista de estudio' : 'Agregar a mi lista de estudio'}
         </button>
 
         <div className="badges">
@@ -176,7 +193,7 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
 function AddAllButton({ conns, nodesById, onDone }) {
   const [done, setDone] = useState(false)
   const items = conns.map((c) => nodesById.get(c.id)).filter(Boolean)
-  if (done) return <span className="add-all-btn" style={{ color: 'var(--muted)', cursor: 'default' }}>agregadas ✓</span>
+  if (done) return <span className="add-all-btn" style={{ color: 'var(--muted)', cursor: 'default' }}>agregadas <CheckIcon size={12} /></span>
   return (
     <button
       className="add-all-btn"

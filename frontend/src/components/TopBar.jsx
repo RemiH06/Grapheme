@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { KIND_LABEL } from '../graph/constants'
+import { BookIcon, BookmarkIcon } from './icons'
 
 function norm(s) {
   return (s || '').toString().toLowerCase()
@@ -105,11 +106,11 @@ export default function TopBar({ nodesById, filters, setFilters, onSelectSearch,
       </button>
 
       <button className="vault-btn" onClick={onOpenStudy}>
-        📚 <span className="label">Estudiar{dueCount > 0 ? ` (${dueCount})` : ''}</span>
+        <BookIcon size={16} /> <span className="label">Estudiar{dueCount > 0 ? ` (${dueCount})` : ''}</span>
       </button>
 
       <button className="vault-btn" onClick={onOpenVault}>
-        🔖 <span className="label">Mis notas</span>
+        <BookmarkIcon size={16} /> <span className="label">Mis notas</span>
       </button>
     </div>
   )

@@ -21,13 +21,13 @@
 completo de kanji jōyō (2136) y hanzi HSK 3.0 (3000) en un solo grafo,
 para estudiar japonés (JLPT) y chino (HSK) viendo qué componentes
 comparten los caracteres entre sí. Nace de una clasificación de
-radicales hecha a mano en Excel (`docs/Pictograms.xlsx`), ampliada con
-tres datasets abiertos para cubrir lecturas, frecuencia real de uso y
-descomposición de cada carácter — ver `docs/METODOLOGIA.md` para el
+radicales hecha a mano en Excel que hice hace varios años (`docs/Pictograms.xlsx`), ampliada con
+cuatro datasets abiertos para cubrir lecturas, frecuencia real de uso y
+descomposición de cada carácter: ver `docs/METODOLOGIA.md` para el
 detalle completo de qué dato sale de dónde.
 
 El grafo es dirigido (componente → carácter que lo contiene) y
-distingue conexiones semánticas de fonéticas — la mayoría de los hanzi
+distingue conexiones semánticas de fonéticas. La mayoría de los hanzi
 son compuestos fono-semánticos, y confundir "suena igual" con
 "significa algo relacionado" es un error común al aprender. Corre
 completamente local: un backend FastAPI sirve el grafo estático y

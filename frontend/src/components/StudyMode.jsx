@@ -3,6 +3,7 @@ import { fetchDueCards, reviewCard } from '../api/client'
 import { CATEGORY_INFO } from '../graph/constants'
 import { checkMeaning } from '../utils/quiz'
 import { canSpeak, hasReading, preferredLang, speak } from '../utils/speech'
+import { BookIcon, CheckIcon, CloseIcon, SoundIcon, StarIcon, XMarkIcon } from './icons'
 
 const GRADES = [
   { grade: 0, label: 'Otra vez' },
@@ -90,7 +91,9 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
     <div className="modal-backdrop open" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal study-modal">
         <div className="modal-head">
-          <h2>📚 Repaso de hoy</h2>
+          <h2>
+            <BookIcon size={17} /> Repaso de hoy
+          </h2>
           <div className="study-mode-toggle">
             <button className={mode === 'reveal' ? 'active' : ''} onClick={() => chooseMode('reveal')}>
               Mostrar
@@ -99,8 +102,8 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
               Escribir
             </button>
           </div>
-          <button className="panel-close" onClick={onClose}>
-            ✕
+          <button className="panel-close" aria-label="Cerrar" onClick={onClose}>
+            <CloseIcon />
           </button>
         </div>
 
@@ -110,7 +113,8 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
           <div className="modal-empty">
             No tienes tarjetas pendientes hoy.
             <br />
-            Agrega nodos a tu lista de estudio desde el panel de detalle (☆) para empezar.
+            Agrega nodos a tu lista de estudio desde el panel de detalle (
+            <StarIcon size={12} style={{ verticalAlign: 'middle' }} />) para empezar.
           </div>
         )}
 
@@ -123,7 +127,7 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
 
             {canSpeak() && hasReading(node) && (
               <button className="study-speak" onClick={speakNode} title="Leer en voz alta">
-                🔊 Escuchar
+                <SoundIcon size={15} /> Escuchar
               </button>
             )}
 
@@ -153,7 +157,15 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
               <>
                 {result !== null && (
                   <div className={`study-type-result ${result ? 'ok' : 'no'}`}>
-                    {result ? '✓ Correcto' : `✗ Escribiste: "${answer || '(vacío)'}"`}
+                    {result ? (
+                      <>
+                        <CheckIcon size={14} /> Correcto
+                      </>
+                    ) : (
+                      <>
+                        <XMarkIcon size={13} /> Escribiste: "{answer || '(vacío)'}"
+                      </>
+                    )}
                   </div>
                 )}
                 <div className="badges" style={{ justifyContent: 'center' }}>
@@ -165,7 +177,7 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
                   {node.jlpt && <span className="badge">JLPT {node.jlpt}</span>}
                   {node.hsk && <span className="badge">HSK {node.hsk}</span>}
                 </div>
-                <div className="study-meaning">{node.meaning || '—'}</div>
+                <div className="study-meaning">{node.meaning || 'Sin significado registrado'}</div>
                 <div className="readings" style={{ justifyContent: 'center', alignItems: 'center' }}>
                   {node.onyomi && (
                     <div className="reading-row">
@@ -201,7 +213,7 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
 
         {queue !== null && queue.length > 0 && !node && (
           <div className="modal-empty">
-            Terminaste el repaso de hoy — {queue.length} tarjeta{queue.length === 1 ? '' : 's'}.
+            Terminaste el repaso de hoy: {queue.length} tarjeta{queue.length === 1 ? '' : 's'}.
           </div>
         )}
       </div>

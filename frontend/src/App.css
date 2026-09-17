@@ -233,9 +233,9 @@ canvas { display: block; touch-action: none; width: 100%; height: 100%; }
 .panel-titles { flex: 1; min-width: 0; }
 .panel-kind { font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 3px; }
 .panel-meaning { font-size: 15px; font-weight: 600; color: var(--ink); text-wrap: balance; }
-.panel-close { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; line-height: 1; padding: 2px 4px; }
+.panel-close { background: none; border: none; color: var(--muted); cursor: pointer; line-height: 1; padding: 2px 4px; display: inline-flex; align-items: center; }
 .panel-close:hover { color: var(--ink); }
-.panel-speak { background: none; border: none; color: var(--muted); font-size: 16px; cursor: pointer; line-height: 1; padding: 2px 4px; flex-shrink: 0; }
+.panel-speak { background: none; border: none; color: var(--muted); cursor: pointer; line-height: 1; padding: 2px 4px; flex-shrink: 0; display: inline-flex; align-items: center; }
 .panel-speak:hover { color: var(--accent); }
 .panel-body { flex: 1; overflow-y: auto; padding: 14px 16px 20px; }
 
@@ -331,7 +331,7 @@ canvas { display: block; touch-action: none; width: 100%; height: 100%; }
   overflow: hidden;
 }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--line); }
-.modal-head h2 { font-family: 'Shippori Mincho', serif; font-size: 15px; font-weight: 600; margin: 0; }
+.modal-head h2 { font-family: 'Shippori Mincho', serif; font-size: 15px; font-weight: 600; margin: 0; display: inline-flex; align-items: center; gap: 8px; }
 .modal-body { overflow-y: auto; padding: 6px 8px; }
 .modal-empty { padding: 30px 20px; text-align: center; color: var(--muted); font-size: 13px; }
 
@@ -361,7 +361,7 @@ canvas { display: block; touch-action: none; width: 100%; height: 100%; }
   color: var(--ink);
 }
 .study-type-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.study-type-result { font-size: 13px; font-weight: 600; text-align: center; }
+.study-type-result { font-size: 13px; font-weight: 600; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .study-type-result.ok { color: #2f855a; }
 .study-type-result.no { color: #c53030; }
 .study-body { padding: 22px 24px 26px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
@@ -376,6 +376,9 @@ canvas { display: block; touch-action: none; width: 100%; height: 100%; }
   font-size: 12.5px;
   color: var(--ink);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .study-speak:hover { background: var(--accent-soft); border-color: var(--accent); }
 .study-reveal {
@@ -422,6 +425,9 @@ canvas { display: block; touch-action: none; width: 100%; height: 100%; }
   font-size: 11.5px;
   color: var(--ink-soft);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 .study-star.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 .add-all-btn {
@@ -433,6 +439,9 @@ canvas { display: block; touch-action: none; width: 100%; height: 100%; }
   cursor: pointer;
   padding: 0;
   margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .add-all-btn:hover { text-decoration: underline; }
 
