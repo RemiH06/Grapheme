@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStrokesData } from '../hooks/useStrokesData'
 import { findCandidates } from '../utils/strokeMatch'
 import DrawCanvas from './DrawCanvas'
@@ -13,6 +13,33 @@ export default function DrawFinder({ open, onClose, nodesById, onSelect }) {
   const strokesData = useStrokesData()
   const [results, setResults] = useState(null) // null antes de buscar
 
+  function undo() {
+    canvasRef.current?.undo()
+  }
+
+  function clear() {
+    canvasRef.current?.clear()
+    setResults(null)
+  }
+
+  // Ctrl/Cmd+Z para deshacer, Backspace/Delete para borrar todo -- solo
+  // mientras este modal esta abierto, y sin input de texto de por medio
+  // (es puro dibujo) asi que no hay conflicto con atajos nativos.
+  useEffect(() => {
+    if (!open) return
+    function onKeyDown(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        undo()
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault()
+        clear()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open])
+
   if (!open) return null
 
   function search() {
@@ -20,11 +47,6 @@ export default function DrawFinder({ open, onClose, nodesById, onSelect }) {
     const strokes = canvasRef.current.getStrokes()
     if (strokes.length === 0) return
     setResults(findCandidates(strokes, strokesData, 8))
-  }
-
-  function clear() {
-    canvasRef.current?.clear()
-    setResults(null)
   }
 
   function pick(glyph) {
@@ -56,11 +78,11 @@ export default function DrawFinder({ open, onClose, nodesById, onSelect }) {
           </div>
           <DrawCanvas ref={canvasRef} />
           <div className="draw-tools">
-            <button className="draw-tool-btn" onClick={() => canvasRef.current?.undo()}>
-              Deshacer
+            <button className="draw-tool-btn" onClick={undo} title="Deshacer (Ctrl+Z)">
+              Deshacer <kbd>Ctrl+Z</kbd>
             </button>
-            <button className="draw-tool-btn" onClick={clear}>
-              Borrar
+            <button className="draw-tool-btn" onClick={clear} title="Borrar todo (Retroceso)">
+              Borrar <kbd>⌫</kbd>
             </button>
           </div>
           <button className="study-reveal" onClick={search} disabled={!strokesData}>
