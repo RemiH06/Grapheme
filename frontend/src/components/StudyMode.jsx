@@ -1,9 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { fetchDueCards, reviewCard } from '../api/client'
 import { CATEGORY_INFO } from '../graph/constants'
+import { useStrokesData } from '../hooks/useStrokesData'
 import { checkMeaning } from '../utils/quiz'
+import { scoreTracing } from '../utils/strokeMatch'
 import { canSpeak, hasReading, preferredLang, speak } from '../utils/speech'
+import DrawCanvas from './DrawCanvas'
 import { BookIcon, CheckIcon, CloseIcon, SoundIcon, StarIcon, XMarkIcon } from './icons'
+
+function strokeScoreColor(score) {
+  if (score >= 75) return '#2f855a'
+  if (score >= 45) return '#b7791f'
+  return '#c53030'
+}
 
 const GRADES = [
   { grade: 0, label: 'Otra vez' },
@@ -27,6 +36,9 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
   })
   const [answer, setAnswer] = useState('')
   const [result, setResult] = useState(null) // null | true | false
+  const [drawResult, setDrawResult] = useState(null) // null | { overall, perStroke, ... }
+  const canvasRef = useRef(null)
+  const strokesData = useStrokesData()
 
   useEffect(() => {
     if (!open) return
@@ -35,6 +47,7 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
     setRevealed(false)
     setAnswer('')
     setResult(null)
+    setDrawResult(null)
     fetchDueCards()
       .then((due) => {
         const nodes = due.map((d) => nodesById.get(d.id)).filter(Boolean)
@@ -51,6 +64,8 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
   if (!open) return null
 
   const node = queue && queue[index]
+  const drawPromptPhase = mode === 'draw' && !revealed
+  const drawResultPhase = mode === 'draw' && revealed && drawResult !== null
 
   function chooseMode(m) {
     setMode(m)
@@ -68,6 +83,14 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
     setRevealed(true)
   }
 
+  function submitDrawing() {
+    if (!node || !canvasRef.current) return
+    const refStrokes = strokesData?.[node.glyph]
+    if (!refStrokes) return
+    setDrawResult(scoreTracing(canvasRef.current.getStrokes(), refStrokes))
+    setRevealed(true)
+  }
+
   async function grade(g) {
     if (!node) return
     try {
@@ -79,6 +102,7 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
     setRevealed(false)
     setAnswer('')
     setResult(null)
+    setDrawResult(null)
     setIndex((i) => i + 1)
   }
 
@@ -100,6 +124,9 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
             </button>
             <button className={mode === 'type' ? 'active' : ''} onClick={() => chooseMode('type')}>
               Escribir
+            </button>
+            <button className={mode === 'draw' ? 'active' : ''} onClick={() => chooseMode('draw')}>
+              Dibujar
             </button>
           </div>
           <button className="panel-close" aria-label="Cerrar" onClick={onClose}>
@@ -123,7 +150,34 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
             <div className="study-progress">
               {index + 1} / {queue.length}
             </div>
-            <div className="study-glyph">{node.glyph}</div>
+
+            {drawPromptPhase ? (
+              <div className="study-draw-prompt">
+                <div className="study-meaning">{node.meaning || 'Sin significado registrado'}</div>
+                <div className="readings" style={{ justifyContent: 'center', alignItems: 'center' }}>
+                  {node.onyomi && (
+                    <div className="reading-row">
+                      <span className="label">On'yomi</span>
+                      <span className="val">{node.onyomi}</span>
+                    </div>
+                  )}
+                  {node.kunyomi && (
+                    <div className="reading-row">
+                      <span className="label">Kun'yomi</span>
+                      <span className="val">{node.kunyomi}</span>
+                    </div>
+                  )}
+                  {node.pinyin && (
+                    <div className="reading-row">
+                      <span className="label">Pinyin</span>
+                      <span className="val">{node.pinyin}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              !drawResultPhase && <div className="study-glyph">{node.glyph}</div>
+            )}
 
             {canSpeak() && hasReading(node) && (
               <button className="study-speak" onClick={speakNode} title="Leer en voz alta">
@@ -151,6 +205,60 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
                   Comprobar
                 </button>
               </form>
+            )}
+
+            {mode === 'draw' && strokesData && !strokesData[node.glyph] && !revealed && (
+              <>
+                <div className="draw-missing">Sin datos de trazo para este carácter.</div>
+                <button className="study-reveal" onClick={() => setRevealed(true)}>
+                  Mostrar respuesta
+                </button>
+              </>
+            )}
+
+            {mode === 'draw' && strokesData && strokesData[node.glyph] && (
+              <>
+                <div className="draw-compare">
+                  <DrawCanvas
+                    key={node.id}
+                    ref={canvasRef}
+                    strokeColors={revealed && drawResult ? drawResult.perStroke.map(strokeScoreColor) : undefined}
+                  />
+                  {revealed && drawResult && (
+                    <div className="study-glyph" style={{ fontSize: 56, margin: 0 }}>
+                      {node.glyph}
+                    </div>
+                  )}
+                </div>
+                {!revealed ? (
+                  <>
+                    <div className="draw-tools">
+                      <button className="draw-tool-btn" onClick={() => canvasRef.current?.undo()}>
+                        Deshacer
+                      </button>
+                      <button className="draw-tool-btn" onClick={() => canvasRef.current?.clear()}>
+                        Borrar
+                      </button>
+                    </div>
+                    <button className="study-reveal" onClick={submitDrawing}>
+                      Comprobar
+                    </button>
+                  </>
+                ) : (
+                  drawResult && (
+                    <div className="draw-score">
+                      <span className="pct">{drawResult.overall}%</span> de parecido
+                      {drawResult.drawnCount !== drawResult.referenceCount && (
+                        <>
+                          {' '}
+                          · dibujaste {drawResult.drawnCount} trazo{drawResult.drawnCount === 1 ? '' : 's'}, son{' '}
+                          {drawResult.referenceCount}
+                        </>
+                      )}
+                    </div>
+                  )
+                )}
+              </>
             )}
 
             {revealed && (

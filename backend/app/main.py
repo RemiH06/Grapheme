@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from . import db
 
 DATA_PATH = Path(__file__).resolve().parent / "data" / "graph_data.json"
+STROKES_PATH = Path(__file__).resolve().parent / "data" / "strokes.json"
 
 app = FastAPI(
     title="Grapheme API",
@@ -38,12 +39,13 @@ app.add_middleware(
 )
 
 _graph_cache = None
+_strokes_cache = None
 
 
 @app.on_event("startup")
 def startup():
     db.init_db()
-    global _graph_cache
+    global _graph_cache, _strokes_cache
     if not DATA_PATH.exists():
         raise RuntimeError(
             f"No se encontro {DATA_PATH}. Corre 'python data/build_dataset.py' "
@@ -51,6 +53,10 @@ def startup():
         )
     with open(DATA_PATH, encoding="utf-8") as f:
         _graph_cache = json.load(f)
+    _strokes_cache = {}
+    if STROKES_PATH.exists():
+        with open(STROKES_PATH, encoding="utf-8") as f:
+            _strokes_cache = json.load(f)
 
 
 @app.get("/")
@@ -62,6 +68,15 @@ def root():
 def get_graph():
     """Radicales + caracteres compuestos + componentes fonéticos + aristas."""
     return _graph_cache
+
+
+@app.get("/strokes")
+def get_strokes():
+    """Trazos reales (KanjiVG) por glifo del catalogo: {glifo: [[[x,y]x12] x trazos]},
+    normalizados a un cuadrado 0-1 compartido por todo el glifo. Solo cubre
+    los glifos que KanjiVG tiene (ver data/build_strokes.py); un glifo
+    ausente aqui no tiene datos de trazo reales, no se debe inventar."""
+    return _strokes_cache
 
 
 class NoteIn(BaseModel):

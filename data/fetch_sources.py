@@ -23,6 +23,14 @@ Fuentes:
     cubren (図, 対, 悪, 様...). Respaldo cuando makemeahanzi y
     mega_hanzi no tienen el caracter.
     https://github.com/KanjiVG/kanjivg (CC BY-SA 3.0)
+  - graphics.txt (Make Me a Hanzi): trazos reales por caracter (orden +
+    linea central de cada trazo, campo "medians"), para ~9500
+    caracteres. KanjiVG es de origen japones y no cubre bien los
+    simplificados que se alejaron mucho de su forma tradicional (ej.
+    飞 vs 飛); graphics.txt si, porque es un dataset chino. Usado por
+    data/build_strokes.py como respaldo cuando KanjiVG no tiene el
+    caracter.
+    https://github.com/skishore/makemeahanzi (MIT)
 """
 import gzip
 import urllib.request
@@ -34,6 +42,7 @@ FILES = {
     "kanji-jouyou.json": "https://raw.githubusercontent.com/davidluzgouveia/kanji-data/master/kanji-jouyou.json",
     "mega_hanzi_compilation.csv": "https://raw.githubusercontent.com/alyssabedard/chinese-hsk-and-frequency-lists/master/mega_hanzi_compilation.csv",
     "makemeahanzi_dictionary.txt": "https://raw.githubusercontent.com/skishore/makemeahanzi/master/dictionary.txt",
+    "makemeahanzi_graphics.txt": "https://raw.githubusercontent.com/skishore/makemeahanzi/master/graphics.txt",
 }
 
 # Version fija del release de KanjiVG (no "latest" para que la build sea

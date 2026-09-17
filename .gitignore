@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 backend/app/data/notes.db
 .venv/
+*.log
 
 docs/Pictograms.xlsx
 data/sources/

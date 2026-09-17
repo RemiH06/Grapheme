@@ -22,7 +22,7 @@ completo de kanji jōyō (2136) y hanzi HSK 3.0 (3000) en un solo grafo,
 para estudiar japonés (JLPT) y chino (HSK) viendo qué componentes
 comparten los caracteres entre sí. Nace de una clasificación de
 radicales hecha a mano en Excel que hice hace varios años (`docs/Pictograms.xlsx`), ampliada con
-cuatro datasets abiertos para cubrir lecturas, frecuencia real de uso y
+cinco datasets abiertos para cubrir lecturas, frecuencia real de uso y
 descomposición de cada carácter: ver `docs/METODOLOGIA.md` para el
 detalle completo de qué dato sale de dónde.
 
@@ -35,7 +35,6 @@ guarda notas personales por nodo en SQLite; el frontend es un lienzo
 canvas + d3-force en React.
 
 ```diff
-- ~194 kanji jōyō en su forma shinjitai (図, 対, 労...) todavía no tienen descomposición: las tres fuentes usadas son de origen chino y no cubren esa simplificación específica de Japón.
 - El grafo completo (~4265 nodos) es denso a simple vista sin filtrar; por default solo se muestra JLPT N5-N3 + HSK 1-6.
 ```
 
@@ -47,6 +46,7 @@ canvas + d3-force en React.
    pip install openpyxl
    python fetch_sources.py
    python build_dataset.py
+   python build_strokes.py
    ```
 2. Levantar el backend (puerto 8055):
    ```bash
@@ -64,8 +64,8 @@ canvas + d3-force en React.
 
 ## Features
 
-- Grafo interactivo (canvas + d3-force) de 243 radicales, 3685
-  caracteres y ~7400 aristas dirigidas.
+- Grafo interactivo (canvas + d3-force) de 242 radicales, 3684
+  caracteres y ~7750 aristas dirigidas.
 - Distingue conexiones semánticas de fonéticas (línea sólida vs.
   punteada) con flecha componente → contenedor al seleccionar un nodo.
 - Filtro por idioma (japonés / chino / ambos) y por nivel (JLPT N5-N3
@@ -75,8 +75,18 @@ canvas + d3-force en React.
 - Búsqueda por glifo, lectura o significado.
 - Panel de detalle: lecturas, significado, qué tan común es (percentil
   de frecuencia real de corpus, no inventado), de qué se compone un
-  carácter y en cuáles otros aparece.
+  carácter y en cuáles otros aparece. Se filtra por idioma igual que el
+  grafo.
 - Notas personales por nodo, persistentes en SQLite.
+- Modo de estudio con repetición espaciada (SM-2 simplificado) y tres
+  técnicas: mostrar la respuesta, escribir el significado, o trazar el
+  carácter a mano y calificarlo contra el orden de trazo real (99.9%
+  del catálogo, KanjiVG + makemeahanzi). Lectura en voz alta con Web
+  Speech API.
+- Encontrador de símbolos por dibujo: dibuja un carácter que no
+  recuerdas cómo se busca y la app propone los candidatos del catálogo
+  con trazos más parecidos, comparando la forma completa sin importar
+  el orden ni en cuántos trazos lo partiste.
 - Modo claro/oscuro automático, con paleta neutra y un solo acento de
   color.
 
@@ -85,11 +95,11 @@ canvas + d3-force en React.
 - Recuperar el sistema de nivel/mnemónico del Excel original (ver
   `steps.md`): existía una progresión de aprendizaje pensada a mano
   que se perdió al conectar el catálogo externo.
-- Descomposición para los ~194 kanji shinjitai restantes, si aparece
-  una fuente japonesa dedicada (KRADFILE/RADKFILE).
-- Un modo de estudio tipo tarjetas con repetición espaciada sobre el
-  mismo grafo: que rastree qué símbolos ya se conocen, quizás con
-  lectura en voz alta (Web Speech API) o escritura del significado.
+- Clustering real sobre la estructura del grafo para verificar (o
+  reemplazar) las categorías semánticas asignadas a mano en el Excel.
+- Alineación de trazos tolerante a errores en el quiz de trazado (ver
+  `steps.md`), para que partir un trazo por accidente no desalinee la
+  calificación del resto.
 
 ## Autoría
 

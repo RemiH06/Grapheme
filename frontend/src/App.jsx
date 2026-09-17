@@ -9,6 +9,7 @@ import RadicalGraph from './components/RadicalGraph'
 import DetailPanel from './components/DetailPanel'
 import NotesVault from './components/NotesVault'
 import StudyMode from './components/StudyMode'
+import DrawFinder from './components/DrawFinder'
 
 export default function App() {
   const { graph, error } = useGraphData()
@@ -21,6 +22,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null)
   const [vaultOpen, setVaultOpen] = useState(false)
   const [studyOpen, setStudyOpen] = useState(false)
+  const [drawFinderOpen, setDrawFinderOpen] = useState(false)
   const [dueCount, setDueCount] = useState(0)
   const graphRef = useRef(null)
 
@@ -61,12 +63,13 @@ export default function App() {
 
       if (e.key === 'Escape') {
         if (studyOpen) { closeStudy(); return }
+        if (drawFinderOpen) { setDrawFinderOpen(false); return }
         if (vaultOpen) { setVaultOpen(false); return }
         if (typing) active.blur()
         setSelectedId(null)
         return
       }
-      if (typing || vaultOpen || studyOpen) return
+      if (typing || vaultOpen || studyOpen || drawFinderOpen) return
       if (e.key === '/') {
         e.preventDefault()
         document.querySelector('.search-wrap input')?.focus()
@@ -82,7 +85,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selectedId, vaultOpen, studyOpen])
+  }, [selectedId, vaultOpen, studyOpen, drawFinderOpen])
 
   if (error) {
     return (
@@ -113,6 +116,7 @@ export default function App() {
         onSelectSearch={handleSelectSearch}
         onOpenVault={() => setVaultOpen(true)}
         onOpenStudy={() => setStudyOpen(true)}
+        onOpenDrawFinder={() => setDrawFinderOpen(true)}
         dueCount={dueCount}
       />
       <Legend filters={filters} setFilters={setFilters} />
@@ -147,6 +151,12 @@ export default function App() {
         onClose={closeStudy}
         nodesById={graph.nodesById}
         langFilter={filters.lang}
+      />
+      <DrawFinder
+        open={drawFinderOpen}
+        onClose={() => setDrawFinderOpen(false)}
+        nodesById={graph.nodesById}
+        onSelect={(id) => selectAndCenter(id, { center: true })}
       />
     </div>
   )

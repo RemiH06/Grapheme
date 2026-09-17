@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { KIND_LABEL } from '../graph/constants'
-import { BookIcon, BookmarkIcon } from './icons'
+import { BookIcon, BookmarkIcon, PencilIcon } from './icons'
 
 function norm(s) {
   return (s || '').toString().toLowerCase()
 }
 
-export default function TopBar({ nodesById, filters, setFilters, onSelectSearch, onOpenVault, onOpenStudy, dueCount }) {
+export default function TopBar({ nodesById, filters, setFilters, onSelectSearch, onOpenVault, onOpenStudy, onOpenDrawFinder, dueCount }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
@@ -111,6 +111,10 @@ export default function TopBar({ nodesById, filters, setFilters, onSelectSearch,
 
       <button className="vault-btn" onClick={onOpenVault}>
         <BookmarkIcon size={16} /> <span className="label">Mis notas</span>
+      </button>
+
+      <button className="vault-btn" onClick={onOpenDrawFinder} title="Dibuja un carácter para encontrarlo">
+        <PencilIcon size={16} /> <span className="label">Buscar por trazo</span>
       </button>
     </div>
   )

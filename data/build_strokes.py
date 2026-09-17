@@ -1,16 +1,27 @@
 # -*- coding: utf-8 -*-
 """
 Genera backend/app/data/strokes.json: para cada glifo del catalogo
-(radicales + caracteres jouyou/HSK) que KanjiVG cubra, la lista de sus
-trazos en el orden real de escritura, cada uno como una polilinea de
-N puntos normalizados a un cuadrado 0-1 compartido por todo el glifo
-(mismo sistema de referencia que usa el lienzo de dibujo del frontend,
-ver frontend/src/utils/strokeMatch.js).
+(radicales + caracteres jouyou/HSK), la lista de sus trazos en el
+orden real de escritura, cada uno como una polilinea de N puntos
+normalizados a un cuadrado 0-1 compartido por todo el glifo (mismo
+sistema de referencia que usa el lienzo de dibujo del frontend, ver
+frontend/src/utils/strokeMatch.js).
 
-KanjiVG solo usa dos comandos de trazo SVG en todo el dataset: M
-(mover pluma) y C (curva de Bezier cubica) -- verificado escaneando
-las ~80,000 rutas del XML. Sin arcos, lineas ni curvas "smooth", asi
-que el parser de rutas de abajo cubre el 100% de los casos reales.
+Dos fuentes en cascada:
+  1. KanjiVG (primaria): usa solo dos comandos de trazo SVG en todo el
+     dataset, M (mover pluma) y C (curva de Bezier cubica) -- verificado
+     escaneando las ~80,000 rutas del XML. Sin arcos, lineas ni curvas
+     "smooth", asi que el parser de rutas de abajo cubre el 100% de los
+     casos reales. Es de origen japones y no cubre bien los caracteres
+     simplificados que se alejaron mucho de su forma tradicional (ej.
+     飞 vs 飛: 3 trazos contra 9, formas sin relacion visual real).
+  2. makemeahanzi/graphics.txt (respaldo): campo "medians", la linea
+     central de cada trazo ya como lista de puntos (no hace falta
+     evaluar curvas), en el orden real de escritura. Es un dataset de
+     origen chino, asi que cubre justo el hueco que deja KanjiVG.
+     Sus coordenadas vienen con el eje Y invertido (documentado en su
+     propio README: "the y-axes DECREASES as you move downwards"), se
+     corrige con `y_final = 900 - y_fuente` antes de normalizar.
 
 Uso:
     cd data
@@ -149,8 +160,7 @@ def collect_strokes(root_g):
     return ds
 
 
-def normalize_glyph_strokes(raw_ds):
-    polylines = [path_to_polyline(d) for d in raw_ds]
+def normalize_polylines(polylines):
     all_points = [p for poly in polylines for p in poly]
     xs = [p[0] for p in all_points]
     ys = [p[1] for p in all_points]
@@ -189,21 +199,49 @@ def load_kanjivg_all_strokes():
     return by_glyph
 
 
+def load_mmh_graphics_medians():
+    """glifo -> [[(x,y),...] por trazo], ya con el eje Y corregido."""
+    by_glyph = {}
+    path = SOURCES_DIR / 'makemeahanzi_graphics.txt'
+    if not path.exists():
+        return by_glyph
+    with open(path, encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            medians = rec.get('medians')
+            glyph = rec.get('character')
+            if not glyph or not medians:
+                continue
+            by_glyph[glyph] = [[(x, 900 - y) for x, y in stroke] for stroke in medians]
+    return by_glyph
+
+
 def main():
     graph = json.loads(GRAPH_PATH.read_text(encoding='utf-8'))
     catalog_glyphs = {n['glyph'] for n in graph['radicals']} | {n['glyph'] for n in graph['characters']}
     kvg_strokes = load_kanjivg_all_strokes()
+    mmh_medians = load_mmh_graphics_medians()
 
     out = {}
+    from_kvg = from_mmh = 0
     for glyph in catalog_glyphs:
         raw_ds = kvg_strokes.get(glyph)
-        if not raw_ds:
+        if raw_ds:
+            out[glyph] = normalize_polylines([path_to_polyline(d) for d in raw_ds])
+            from_kvg += 1
             continue
-        out[glyph] = normalize_glyph_strokes(raw_ds)
+        medians = mmh_medians.get(glyph)
+        if medians:
+            out[glyph] = normalize_polylines(medians)
+            from_mmh += 1
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUT_PATH.write_text(json.dumps(out, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
-    print(f"glifos con trazos: {len(out)} / {len(catalog_glyphs)} en catalogo -> {OUT_PATH}")
+    print(f"glifos con trazos: {len(out)} / {len(catalog_glyphs)} en catalogo "
+          f"(KanjiVG={from_kvg}, makemeahanzi={from_mmh}) -> {OUT_PATH}")
 
 
 if __name__ == '__main__':

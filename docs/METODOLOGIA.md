@@ -3,7 +3,9 @@
 Este documento existe para que en 6 meses no haya que releer el código
 para recordar por qué un campo dice lo que dice. Cubre el pipeline
 completo: `docs/Pictograms.xlsx` → `data/fetch_sources.py` →
-`data/build_dataset.py` → `backend/app/data/graph_data.json`.
+`data/build_dataset.py` → `backend/app/data/graph_data.json`, más el
+pipeline paralelo de trazos: `data/build_strokes.py` →
+`backend/app/data/strokes.json` (sección 8).
 
 ## 1. Qué viene de `Pictograms.xlsx` (tuyo) vs. de fuentes externas
 
@@ -190,3 +192,94 @@ corpus: no un número inventado, y japonés/chino no son comparables
   sigue en la lista de radicales sin cambios, por instrucción explícita
   (no se elimina ningún radical del mapeo aunque el Excel lo marcara
   para quitar).
+
+## 8. Trazado a mano y encontrador de símbolos por dibujo
+
+`data/build_strokes.py` extrae, para cada glifo del catálogo, sus
+trazos reales en el orden de escritura correcto (3921 de 3926 glifos,
+99.9%; los 5 que faltan son formas-variante de radicales sin entrada
+propia como carácter completo, ej. 𠂉 y ｜, que ninguna de las dos
+fuentes cubre porque no son caracteres escribibles por sí solas).
+
+Dos fuentes en cascada:
+
+- **KanjiVG** (primaria, 2865 glifos): dibuja cada carácter como un
+  `<path>` de SVG por trazo (curvas de Bezier cúbicas, comando `C`) en
+  el orden real de escritura. `path_to_polyline()` evalúa esa curva a
+  mano (sin librerías de SVG) porque las ~80,000 rutas del dataset
+  completo usan únicamente los comandos `M` y `C`, verificado
+  escaneando el XML completo antes de escribir el parser. Es de origen
+  japonés y no cubre bien los simplificados que se alejaron mucho de
+  su forma tradicional (ej. 飞, 3 trazos, contra 飛, 9 trazos: formas
+  sin relación visual real, fusionarlas habría sido peor que no tener
+  dato).
+- **makemeahanzi/graphics.txt** (respaldo, 1056 glifos): campo
+  `medians`, la línea central de cada trazo ya como lista de puntos
+  (no hace falta evaluar curvas). Es un dataset de origen chino, así
+  que cubre justo el hueco que deja KanjiVG (permitió encontrar 飞,
+  entre muchos otros). Sus coordenadas vienen con el eje Y invertido
+  (documentado en su propio README: "the y-axes DECREASES as you move
+  downwards"); se corrige con `y_final = 900 - y_fuente` antes de
+  normalizar (verificado con las esquinas documentadas del cuadro:
+  (0,900) y (1024,-124) en la fuente deben mapear a (0,0) y
+  (1024,1024)).
+- **Normalización**: cada trazo se re-muestrea a 12 puntos espaciados
+  por longitud de arco, y todos los trazos de un mismo glifo se
+  escalan/centran juntos en un cuadrado 0-1 compartido (para que la
+  posición y tamaño relativo de cada trazo dentro del carácter se
+  conserve). El frontend (`utils/strokeMatch.js`,
+  `normalizeDrawnStrokes()`) le hace exactamente lo mismo a lo que el
+  usuario dibuja en `DrawCanvas.jsx`, para que ambos lados sean
+  comparables sin importar el tamaño real del canvas ni la velocidad
+  de trazo.
+- **Quiz de trazado** (`StudyMode.jsx`, modo "Dibujar"): compara el
+  trazo N dibujado contra el trazo N real, **a propósito por posición**:
+  el objetivo es evaluar si el orden de escritura es el correcto, no
+  solo si la forma final se parece. Ver `steps.md` por el límite
+  conocido (un trazo partido a la mitad desalinea todo lo que sigue).
+- **Encontrador de símbolos por dibujo** (`DrawFinder.jsx`): el sentido
+  inverso, buscar qué carácter es a partir de un dibujo sin saber su
+  nombre. Aquí el orden de trazo y en cuántos trazos se partió el
+  dibujo **no** deberían importar (es reconocer una forma, no evaluar
+  caligrafía).
+
+  La primera versión sí filtraba candidatos por conteo de trazos (±1)
+  y comparaba trazo por trazo. El usuario reportó que la inferencia se
+  sentía sesgada hacia caracteres comunes al escribir en cursiva o sin
+  el orden correcto: comprobado con datos reales (学, 8 trazos,
+  fusionado a mano en 4 "trazos" de cursiva). El propio 学 seguía
+  siendo la mejor coincidencia real por forma, pero el filtro de ±1
+  trazo lo descartaba de la competencia por completo, dejando ganar
+  solo a caracteres de 3-4 trazos sin relación (手, 予, 干...), que
+  además tienden a ser los más comunes del catálogo. No era sesgo
+  hacia la frecuencia real (`findCandidates` nunca usa ese dato); era
+  que solo los caracteres simples podían competir siquiera.
+
+  El arreglo (`findCandidates` en `utils/strokeMatch.js`) trata el
+  dibujo como una nube de puntos sin orden ni conectividad entre
+  trazos (distancia "Chamfer": cada punto busca su vecino más cercano
+  del otro lado, en ambas direcciones), en vez de comparar trazo por
+  trazo. Un intento intermedio (concatenar todos los trazos en un solo
+  camino y re-muestrear por longitud de arco) tampoco sirvió: el salto
+  entre el final de un trazo y el inicio del siguiente se contaba como
+  distancia real, así que dos trazos bien dibujados pero separados
+  (ej. una cruz simple para 十) se comparaban peor de lo que debían.
+  Esto trajo un segundo sesgo, tambien reportado por el usuario: un
+  dibujo simple encontraba caracteres muy complejos (10-17 trazos)
+  casi empatados con la respuesta simple correcta. La causa es una
+  asimetria real de la distancia Chamfer cuando las dos nubes de
+  puntos tienen tamaños muy distintos: un carácter de 17 trazos aporta
+  ~4 veces más puntos que uno de 4, repartidos por todo el cuadrado
+  0-1, así que CUALQUIER dibujo tiene más chance de caer cerca de
+  alguno de esos puntos solo por azar, sin que la forma real se
+  parezca en nada. Comprobado: una simple línea horizontal encontraba
+  一 correctamente pero con caracteres de 13-17 trazos casi empatados
+  unos puntos después.
+
+  El arreglo final: en vez de diluir cada nube proporcionalmente a su
+  propio tamaño (1 de cada 3 puntos), se limita a ambos lados (dibujo y
+  cada candidato) al mismo tope fijo de 24 puntos (`CLOUD_CAP` en
+  `utils/strokeMatch.js`): así un carácter complejo ya no aporta más
+  "oportunidades" de coincidir por pura densidad de puntos. De paso
+  resuelve el costo de comparar ~2865 candidatos (una búsqueda completa
+  corre en ~200ms).

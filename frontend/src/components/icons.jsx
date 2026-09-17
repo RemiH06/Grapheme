@@ -74,3 +74,12 @@ export function BookmarkIcon({ size = 18, className, style }) {
     </svg>
   )
 }
+
+export function PencilIcon({ size = 18, className, style }) {
+  return (
+    <svg {...base(size)} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <path d="M14.5 4.5l5 5L8 21H3v-5z" />
+      <path d="M12.5 6.5l5 5" />
+    </svg>
+  )
+}

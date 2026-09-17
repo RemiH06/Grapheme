@@ -10,6 +10,10 @@ export function fetchGraph() {
   return req('/graph')
 }
 
+export function fetchStrokes() {
+  return req('/strokes')
+}
+
 export function fetchAllNotes() {
   return req('/notes')
 }
