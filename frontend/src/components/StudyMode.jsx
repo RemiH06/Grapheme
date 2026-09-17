@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchDueCards, reviewCard } from '../api/client'
 import { CATEGORY_INFO } from '../graph/constants'
+import { checkMeaning } from '../utils/quiz'
 import { canSpeak, preferredLang, speak } from '../utils/speech'
 
 const GRADES = [
@@ -10,16 +11,29 @@ const GRADES = [
   { grade: 3, label: 'Fácil' },
 ]
 
+const MODE_KEY = 'grapheme.study.mode'
+
 export default function StudyMode({ open, onClose, nodesById, langFilter }) {
   const [queue, setQueue] = useState(null) // null = cargando
   const [index, setIndex] = useState(0)
   const [revealed, setRevealed] = useState(false)
+  const [mode, setMode] = useState(() => {
+    try {
+      return localStorage.getItem(MODE_KEY) === 'type' ? 'type' : 'reveal'
+    } catch {
+      return 'reveal'
+    }
+  })
+  const [answer, setAnswer] = useState('')
+  const [result, setResult] = useState(null) // null | true | false
 
   useEffect(() => {
     if (!open) return
     setQueue(null)
     setIndex(0)
     setRevealed(false)
+    setAnswer('')
+    setResult(null)
     fetchDueCards()
       .then((due) => {
         const nodes = due.map((d) => nodesById.get(d.id)).filter(Boolean)
@@ -37,6 +51,22 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
 
   const node = queue && queue[index]
 
+  function chooseMode(m) {
+    setMode(m)
+    try {
+      localStorage.setItem(MODE_KEY, m)
+    } catch {
+      // localStorage puede fallar en privado/bloqueado, no es critico
+    }
+  }
+
+  function submitAnswer(e) {
+    e.preventDefault()
+    if (!node) return
+    setResult(checkMeaning(answer, node.meaning))
+    setRevealed(true)
+  }
+
   async function grade(g) {
     if (!node) return
     try {
@@ -46,6 +76,8 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
       // interrumpir el repaso por un error de red pasajero
     }
     setRevealed(false)
+    setAnswer('')
+    setResult(null)
     setIndex((i) => i + 1)
   }
 
@@ -59,6 +91,14 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
       <div className="modal study-modal">
         <div className="modal-head">
           <h2>📚 Repaso de hoy</h2>
+          <div className="study-mode-toggle">
+            <button className={mode === 'reveal' ? 'active' : ''} onClick={() => chooseMode('reveal')}>
+              Mostrar
+            </button>
+            <button className={mode === 'type' ? 'active' : ''} onClick={() => chooseMode('type')}>
+              Escribir
+            </button>
+          </div>
           <button className="panel-close" onClick={onClose}>
             ✕
           </button>
@@ -87,14 +127,35 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
               </button>
             )}
 
-            {!revealed && (
+            {!revealed && mode === 'reveal' && (
               <button className="study-reveal" onClick={() => setRevealed(true)}>
                 Mostrar respuesta
               </button>
             )}
 
+            {!revealed && mode === 'type' && (
+              <form className="study-type-form" onSubmit={submitAnswer}>
+                <input
+                  key={node.id}
+                  autoFocus
+                  className="study-type-input"
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  placeholder="Escribe el significado en inglés..."
+                />
+                <button type="submit" className="study-reveal">
+                  Comprobar
+                </button>
+              </form>
+            )}
+
             {revealed && (
               <>
+                {result !== null && (
+                  <div className={`study-type-result ${result ? 'ok' : 'no'}`}>
+                    {result ? '✓ Correcto' : `✗ Escribiste: "${answer || '(vacío)'}"`}
+                  </div>
+                )}
                 <div className="badges" style={{ justifyContent: 'center' }}>
                   {node.kind === 'radical' && (
                     <span className="badge cat" style={{ background: `var(${CATEGORY_INFO[node.category].varName})` }}>

@@ -337,6 +337,33 @@ canvas { display: block; touch-action: none; width: 100%; height: 100%; }
 
 /* ---------- modo de estudio ---------- */
 .study-modal { width: 460px; }
+.study-mode-toggle { display: flex; gap: 4px; background: var(--surface-2); border-radius: 8px; padding: 3px; }
+.study-mode-toggle button {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-family: inherit;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.study-mode-toggle button.active { background: var(--surface); color: var(--ink); font-weight: 600; }
+.study-type-form { display: flex; gap: 8px; width: 100%; margin-top: 6px; }
+.study-type-input {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.study-type-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.study-type-result { font-size: 13px; font-weight: 600; text-align: center; }
+.study-type-result.ok { color: #2f855a; }
+.study-type-result.no { color: #c53030; }
 .study-body { padding: 22px 24px 26px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .study-progress { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; align-self: flex-start; }
 .study-glyph { font-family: 'Noto Serif JP', serif; font-size: 88px; line-height: 1; color: var(--ink); margin: 10px 0; }
