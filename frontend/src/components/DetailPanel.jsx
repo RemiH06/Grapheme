@@ -1,5 +1,8 @@
+import { useState } from 'react'
+import { addManyToStudy } from '../api/client'
 import { CATEGORY_INFO, ROLE_LABEL } from '../graph/constants'
 import { useNotes } from '../hooks/useNotes'
+import { useStudyStar } from '../hooks/useStudyStar'
 
 function kindLine(n) {
   if (n.kind === 'radical') {
@@ -16,9 +19,15 @@ function kindLine(n) {
   return 'Componente fonético (fuera de la lista de radicales)'
 }
 
-export default function DetailPanel({ node, nodesById, adjacency, onClose, onSelect }) {
+export default function DetailPanel({ node, nodesById, adjacency, onClose, onSelect, onStudyChange }) {
   const notes = useNotes(node?.id, node?.glyph)
+  const star = useStudyStar(node?.id, node?.glyph)
   if (!node) return <div className="panel" />
+
+  async function toggleStar() {
+    await star.toggle()
+    onStudyChange?.()
+  }
 
   const byDegreeDesc = (a, b) => (nodesById.get(b.id)?.degree || 0) - (nodesById.get(a.id)?.degree || 0)
   const allConns = adjacency.get(node.id)
@@ -43,6 +52,10 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
       </div>
 
       <div className="panel-body">
+        <button className={`study-star${star.inStudy ? ' on' : ''}`} onClick={toggleStar} style={{ marginBottom: 14 }}>
+          {star.inStudy ? '★ En mi lista de estudio' : '☆ Agregar a mi lista de estudio'}
+        </button>
+
         <div className="badges">
           {node.kind === 'radical' && (
             <span className="badge cat" style={{ background: `var(${CATEGORY_INFO[node.category].varName})` }}>
@@ -111,7 +124,10 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
 
         {components.length > 0 && (
           <>
-            <div className="section-title">Se compone de ({components.length})</div>
+            <div className="section-title">
+              Se compone de ({components.length})
+              <AddAllButton conns={components} nodesById={nodesById} onDone={onStudyChange} />
+            </div>
             <ConnList conns={components} nodesById={nodesById} onSelect={onSelect} />
           </>
         )}
@@ -120,6 +136,7 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
           {usedIn.length === 0
             ? 'No aparece en ningún otro carácter todavía'
             : `Aparece en ${usedIn.length} carácter${usedIn.length === 1 ? '' : 'es'}`}
+          {usedIn.length > 0 && <AddAllButton conns={usedIn} nodesById={nodesById} onDone={onStudyChange} />}
         </div>
         {usedIn.length === 0 ? (
           <div className="empty-conn">Es una hoja: nada lo usa como pieza en el catálogo actual.</div>
@@ -138,6 +155,24 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
         </div>
       </div>
     </div>
+  )
+}
+
+function AddAllButton({ conns, nodesById, onDone }) {
+  const [done, setDone] = useState(false)
+  const items = conns.map((c) => nodesById.get(c.id)).filter(Boolean)
+  if (done) return <span className="add-all-btn" style={{ color: 'var(--muted)', cursor: 'default' }}>agregadas ✓</span>
+  return (
+    <button
+      className="add-all-btn"
+      onClick={async () => {
+        setDone(true)
+        await addManyToStudy(items.map((n) => ({ id: n.id, glyph: n.glyph })))
+        onDone?.()
+      }}
+    >
+      + agregar todas a estudio
+    </button>
   )
 }
 

@@ -388,7 +388,7 @@ const RadicalGraph = forwardRef(function RadicalGraph(
       <div className="hint">
         Arrastra el fondo para mover el mapa · rueda para zoom · arrastra un nodo para acomodarlo · clic para ver el
         detalle (flecha = componente → contenedor, punteado = solo suena igual) · <kbd>/</kbd> buscar ·{' '}
-        <kbd>N</kbd> ir a notas · <kbd>Esc</kbd> cerrar
+        <kbd>N</kbd> ir a notas · <kbd>S</kbd> estudiar · <kbd>Esc</kbd> cerrar
       </div>
       <div className="counts">
         {counts.radicals} radicales · {counts.compounds} caracteres · {counts.edges} conexiones

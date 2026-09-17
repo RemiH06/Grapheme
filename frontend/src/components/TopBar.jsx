@@ -5,7 +5,7 @@ function norm(s) {
   return (s || '').toString().toLowerCase()
 }
 
-export default function TopBar({ nodesById, filters, setFilters, onSelectSearch, onOpenVault }) {
+export default function TopBar({ nodesById, filters, setFilters, onSelectSearch, onOpenVault, onOpenStudy, dueCount }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
@@ -102,6 +102,10 @@ export default function TopBar({ nodesById, filters, setFilters, onSelectSearch,
         onClick={() => setFilters((f) => ({ ...f, showAllRadicals: !f.showAllRadicals }))}
       >
         <span className="sw" /> Ver los 243 radicales
+      </button>
+
+      <button className="vault-btn" onClick={onOpenStudy}>
+        📚 <span className="label">Estudiar{dueCount > 0 ? ` (${dueCount})` : ''}</span>
       </button>
 
       <button className="vault-btn" onClick={onOpenVault}>

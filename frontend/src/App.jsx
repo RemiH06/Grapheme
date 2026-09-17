@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
+import { fetchDueCards } from './api/client'
 import { useGraphData } from './hooks/useGraphData'
 import { CATEGORY_ORDER } from './graph/constants'
 import TopBar from './components/TopBar'
@@ -7,6 +8,7 @@ import Legend from './components/Legend'
 import RadicalGraph from './components/RadicalGraph'
 import DetailPanel from './components/DetailPanel'
 import NotesVault from './components/NotesVault'
+import StudyMode from './components/StudyMode'
 
 export default function App() {
   const { graph, error } = useGraphData()
@@ -18,7 +20,21 @@ export default function App() {
   })
   const [selectedId, setSelectedId] = useState(null)
   const [vaultOpen, setVaultOpen] = useState(false)
+  const [studyOpen, setStudyOpen] = useState(false)
+  const [dueCount, setDueCount] = useState(0)
   const graphRef = useRef(null)
+
+  function refreshDueCount() {
+    fetchDueCards()
+      .then((due) => setDueCount(due.length))
+      .catch(() => {})
+  }
+  useEffect(refreshDueCount, [])
+
+  function closeStudy() {
+    setStudyOpen(false)
+    refreshDueCount()
+  }
 
   function selectAndCenter(id, opts = {}) {
     setSelectedId(id)
@@ -44,12 +60,13 @@ export default function App() {
       const typing = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')
 
       if (e.key === 'Escape') {
+        if (studyOpen) { closeStudy(); return }
         if (vaultOpen) { setVaultOpen(false); return }
         if (typing) active.blur()
         setSelectedId(null)
         return
       }
-      if (typing || vaultOpen) return
+      if (typing || vaultOpen || studyOpen) return
       if (e.key === '/') {
         e.preventDefault()
         document.querySelector('.search-wrap input')?.focus()
@@ -57,11 +74,15 @@ export default function App() {
       }
       if ((e.key === 'n' || e.key === 'N') && selectedId) {
         document.querySelector('.notes-box textarea')?.focus()
+        return
+      }
+      if (e.key === 's' || e.key === 'S') {
+        setStudyOpen(true)
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selectedId, vaultOpen])
+  }, [selectedId, vaultOpen, studyOpen])
 
   if (error) {
     return (
@@ -91,6 +112,8 @@ export default function App() {
         setFilters={setFilters}
         onSelectSearch={handleSelectSearch}
         onOpenVault={() => setVaultOpen(true)}
+        onOpenStudy={() => setStudyOpen(true)}
+        dueCount={dueCount}
       />
       <Legend filters={filters} setFilters={setFilters} />
       <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
@@ -109,6 +132,7 @@ export default function App() {
           adjacency={graph.adjacency}
           onClose={() => setSelectedId(null)}
           onSelect={(id) => selectAndCenter(id)}
+          onStudyChange={refreshDueCount}
         />
       </div>
       <NotesVault
@@ -116,6 +140,12 @@ export default function App() {
         onClose={() => setVaultOpen(false)}
         nodesById={graph.nodesById}
         onSelect={(id) => selectAndCenter(id, { center: true })}
+      />
+      <StudyMode
+        open={studyOpen}
+        onClose={closeStudy}
+        nodesById={graph.nodesById}
+        langFilter={filters.lang}
       />
     </div>
   )

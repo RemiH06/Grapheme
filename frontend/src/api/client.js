@@ -25,3 +25,45 @@ export function saveNote(id, text, glyph) {
     body: JSON.stringify({ text, glyph }),
   })
 }
+
+// ---- lista de estudio + repeticion espaciada ----
+
+export function fetchStudyState(id) {
+  return req(`/study/${encodeURIComponent(id)}`)
+}
+
+export function fetchDueCards() {
+  return req('/study/due')
+}
+
+export function fetchStudyList() {
+  return req('/study/list')
+}
+
+export function addToStudy(id, glyph) {
+  return req(`/study/${encodeURIComponent(id)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ glyph }),
+  })
+}
+
+export function addManyToStudy(items) {
+  return req('/study/add-many', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  })
+}
+
+export function removeFromStudy(id) {
+  return req(`/study/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export function reviewCard(id, grade, glyph) {
+  return req(`/study/${encodeURIComponent(id)}/review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grade, glyph }),
+  })
+}
