@@ -55,12 +55,26 @@ versionan, ver `.gitignore`):
 | kanji-data | [davidluzgouveia/kanji-data](https://github.com/davidluzgouveia/kanji-data) | Los 2136 kanji jōyō oficiales: JLPT (escala no oficial post-2010, la única que existe hoy), grado escolar, frecuencia real (corpus de periódico), on'yomi/kun'yomi, significado en inglés | MIT |
 | chinese-hsk-and-frequency-lists | [alyssabedard/...](https://github.com/alyssabedard/chinese-hsk-and-frequency-lists) | Los 3000 hanzi HSK 3.0 oficiales (niveles 1-9), pinyin, frecuencia real (Jun Da, corpus moderno de ~200M caracteres) | MIT / CC BY-SA 4.0 |
 | makemeahanzi | [skishore/makemeahanzi](https://github.com/skishore/makemeahanzi) | Descomposición posicional (IDS, Ideographic Description Sequences) + etimología con rol semántico/fonético, para ~9500 caracteres | MIT |
+| KanjiVG | [KanjiVG/kanjivg](https://github.com/KanjiVG/kanjivg) | Descomposición de trazos específica de Japón (`kvg:element`/`kvg:position`/`kvg:phon`), único respaldo que sí conoce la forma *shinjitai* | CC BY-SA 3.0 |
 
-`mega_hanzi_compilation.csv` (dentro del segundo repo) es el respaldo
-de descomposición cuando makemeahanzi no tiene el carácter: trae una
-lista plana de componentes sin posición ni rol (se le asigna
-`role='sem'` por default ahí, con menos confianza que la fuente
-principal).
+`components_of()` en `build_dataset.py` prueba las fuentes en cascada,
+en este orden, y usa la primera que tenga datos para el glifo:
+
+1. **makemeahanzi** (IDS + etimología con rol semántico/fonético) —
+   fuente principal, la más confiable.
+2. **`mega_hanzi_compilation.csv`** (dentro del repo de HSK) — respaldo
+   cuando makemeahanzi no tiene el carácter: lista plana de componentes
+   sin posición ni rol (se le asigna `role='sem'` por default, con
+   menos confianza que la fuente principal).
+3. **KanjiVG** — segundo respaldo, solo entra cuando ni makemeahanzi ni
+   mega_hanzi tienen nada. Es de origen japonés (no chino como las
+   otras dos), así que es la única que cubre los kanji jōyō en su forma
+   *shinjitai* (図, 対, 労, 営, 実...), que las fuentes chinas no
+   indexan bajo ningún codepoint. Trae posición (`kvg:position`,
+   términos de caligrafía japonesa: kamae/tare/nyo/etc., mapeados a las
+   mismas etiquetas que IDS en `KANJIVG_POSITION_MAP`) y a veces un
+   hint fonético (`kvg:phon`) que se usa igual que el `phonetic` de
+   makemeahanzi para decidir el rol de la arista.
 
 ## 4. Cómo se decide si un radical "ya no se descompone más"
 
@@ -84,6 +98,13 @@ sueltos (大 = 一+人, "una persona con los brazos abiertos"), aunque
 para un radical tan básico eso raye en trivial. Se dejó así por ser
 una regla explicable y consistente en vez de una lista de excepciones
 a mano.
+
+Caso de verificación: **龠** (flauta de pan) sigue sin aristas de
+entrada aunque KanjiVG sí trae un desglose gráfico de sus trazos. Es
+correcto que se quede así — makemeahanzi clasifica su etimología como
+`pictographic` ("Panpipes": un dibujo de una sola pieza), así que
+`is_pictographic()` lo protege igual que a 木 o 水. No es un hueco de
+cobertura, es la regla funcionando como debe.
 
 ## 5. Dirección de las aristas y rol semántico/fonético
 
@@ -115,15 +136,26 @@ corpus — no un número inventado, y japonés/chino no son comparables
 
 ## 7. Límites conocidos (ver también `steps.md`)
 
-- **~194 kanji jōyō en forma shinjitai** (図, 対, 労, 営, 実...) sin
-  descomposición: las tres fuentes son de origen chino y esa
-  simplificación específica de Japón no aparece en ninguna, ni como
-  simplificado, ni como tradicional. Necesitaría KRADFILE/RADKFILE
-  (EDRDG), que no se pudo descargar (404 en los mirrors probados).
+- **Caracteres sin ninguna arista de entrada: 0.** El hueco de ~194
+  kanji jōyō en forma *shinjitai* (図, 対, 労, 営, 実...) que las
+  fuentes chinas no cubrían quedó resuelto al agregar KanjiVG como
+  tercer nivel de respaldo en `components_of()` (sección 3).
+- **Radicales sin ninguna arista de entrada: 10** (de 242) — todos
+  verificados como correctos, no como huecos:
+  - マ, ユ: marcadores mnemotécnicos propios (no son radicales Unicode
+    reales, no hay fuente externa que pueda cubrirlos).
+  - ヨ: variante rara de "hocico de cerdo", sin uso como componente en
+    el catálogo actual.
+  - 韭, 鹵, 黽, 鼎, 鼠, 齊: radicales clásicos Kangxi legítimos pero muy
+    raros, que ninguna de las cuatro fuentes usa como componente de
+    otro carácter en el catálogo jōyō+HSK actual.
+  - 龠: exclusión deliberada y correcta por etimología `pictographic`
+    (ver sección 4, caso de verificación) — no un hueco de cobertura.
 - **111 de 242 radicales sin categoría semántica**: así estaba tu
   matriz original, nunca se completó.
 - **Tier / nombres de nivel del Excel**: parseados parcialmente,
   no conectados a la UI (ver sección 1).
-- **Las marcas "remove" (鬥) y "breakdown" (龠)** del Excel original
-  nunca se resolvieron — ambos siguen en la lista de radicales sin
-  cambios.
+- **La marca "remove" (鬥)** del Excel original nunca se resolvió —
+  sigue en la lista de radicales sin cambios, por instrucción explícita
+  (no se elimina ningún radical del mapeo aunque el Excel lo marcara
+  para quitar).

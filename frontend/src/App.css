@@ -235,6 +235,8 @@ canvas { display: block; touch-action: none; width: 100%; height: 100%; }
 .panel-meaning { font-size: 15px; font-weight: 600; color: var(--ink); text-wrap: balance; }
 .panel-close { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; line-height: 1; padding: 2px 4px; }
 .panel-close:hover { color: var(--ink); }
+.panel-speak { background: none; border: none; color: var(--muted); font-size: 16px; cursor: pointer; line-height: 1; padding: 2px 4px; flex-shrink: 0; }
+.panel-speak:hover { color: var(--accent); }
 .panel-body { flex: 1; overflow-y: auto; padding: 14px 16px 20px; }
 
 .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }

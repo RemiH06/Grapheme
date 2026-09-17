@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Descarga (una sola vez) los tres datasets abiertos que alimentan el
+Descarga (una sola vez) los cuatro datasets abiertos que alimentan el
 catalogo completo de kanji/hanzi. Si el archivo ya existe en
 data/sources/ no se vuelve a descargar -- borralo a mano si quieres
 refrescarlo.
@@ -14,12 +14,17 @@ Fuentes:
     pinyin y descomposicion en componentes.
     https://github.com/alyssabedard/chinese-hsk-and-frequency-lists
   - dictionary.txt (Make Me a Hanzi): descomposicion IDS + etimologia
-    (marca componente semantico/fonetico) para ~9500 caracteres, usado
-    como respaldo cuando un kanji joyo no aparece en el csv anterior
-    (formas shinjitai japonesas que no coinciden con el simplificado
-    ni el tradicional chino).
+    (marca componente semantico/fonetico) para ~9500 caracteres. Fuente
+    principal de descomposicion.
     https://github.com/skishore/makemeahanzi (MIT)
+  - kanjivg.xml (KanjiVG): descomposicion posicional real (izquierda/
+    derecha/arriba/abajo/etc.) especifica de Japon, para ~6700 kanji
+    incluyendo formas shinjitai que las fuentes de origen chino no
+    cubren (図, 対, 悪, 様...). Respaldo cuando makemeahanzi y
+    mega_hanzi no tienen el caracter.
+    https://github.com/KanjiVG/kanjivg (CC BY-SA 3.0)
 """
+import gzip
 import urllib.request
 from pathlib import Path
 
@@ -30,6 +35,10 @@ FILES = {
     "mega_hanzi_compilation.csv": "https://raw.githubusercontent.com/alyssabedard/chinese-hsk-and-frequency-lists/master/mega_hanzi_compilation.csv",
     "makemeahanzi_dictionary.txt": "https://raw.githubusercontent.com/skishore/makemeahanzi/master/dictionary.txt",
 }
+
+# Version fija del release de KanjiVG (no "latest" para que la build sea
+# reproducible sin que un release nuevo cambie el dataset por sorpresa).
+KANJIVG_URL = "https://github.com/KanjiVG/kanjivg/releases/download/r20250816/kanjivg-20250816.xml.gz"
 
 
 def fetch_all():
@@ -42,6 +51,18 @@ def fetch_all():
         print(f"descargando {name} ...")
         urllib.request.urlretrieve(url, dest)
         print(f"  -> {dest.stat().st_size} bytes")
+
+    kanjivg_dest = SOURCES_DIR / "kanjivg.xml"
+    if kanjivg_dest.exists():
+        print("ya existe: kanjivg.xml")
+    else:
+        print("descargando kanjivg.xml.gz ...")
+        gz_path = SOURCES_DIR / "kanjivg.xml.gz"
+        urllib.request.urlretrieve(KANJIVG_URL, gz_path)
+        with gzip.open(gz_path, "rt", encoding="utf-8") as f_in, open(kanjivg_dest, "w", encoding="utf-8") as f_out:
+            f_out.write(f_in.read())
+        gz_path.unlink()
+        print(f"  -> {kanjivg_dest.stat().st_size} bytes (descomprimido)")
 
 
 if __name__ == "__main__":

@@ -10,13 +10,16 @@ Fuentes (ver data/fetch_sources.py para las URLs y licencias):
   - mega_hanzi_compilation.csv: hanzi con nivel HSK 3.0, frecuencia
     real (Jun Da, corpus moderno de ~200M caracteres) y descomposicion.
   - makemeahanzi/dictionary.txt: descomposicion posicional (IDS) +
-    etimologia semantica/fonetica, usada como fuente principal de
-    componentes; mega_hanzi es el respaldo cuando un kanji joyo
-    (forma shinjitai) no aparece ahi.
+    etimologia semantica/fonetica, fuente PRINCIPAL de componentes.
+  - mega_hanzi (columna decomposition2_with_radical): respaldo 1,
+    lista plana sin posicion, para lo que makemeahanzi no cubra.
+  - kanjivg.xml: respaldo 2, especifico de Japon (posicion real +
+    pista fonetica), para las formas shinjitai que ninguna fuente de
+    origen chino cubre (図, 対, 悪, 様...).
 
 Uso:
     cd data
-    python fetch_sources.py   # una sola vez, cachea los 3 archivos
+    python fetch_sources.py   # una sola vez, cachea los 4 archivos
     python build_dataset.py
 
 Vuelve a correr build_dataset.py cada vez que se edite este archivo o
@@ -26,6 +29,7 @@ quieras refrescar los datasets (borra data/sources/ y vuelve a correrlo).
 import csv
 import json
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import openpyxl
@@ -252,6 +256,11 @@ MERGE_INTO = {
     # 老 (viejo, caracter completo) vs ⺹ (forma recortada de "corona"
     # que trae el Excel).
     '老': '⺹',
+    # Encontrados al integrar KanjiVG (mismos "dos codepoints" del punto 2):
+    # 覀 forma recortada de 襾/西 cuando corona un caracter (ej. 価).
+    '覀': '西',
+    # ⺍ variante de "pequeno" que usa KanjiVG, distinta de la ⺌ del Excel.
+    '⺍': '小',
 }
 
 # El radical de "oreja" (阝) es ambiguo sin ver la posicion: a la
@@ -352,6 +361,48 @@ def load_mmh_dictionary():
     return by_glyph
 
 
+KANJIVG_NS = '{http://kanjivg.tagaini.net}'
+# Vocabulario japones de posicion de radical (構え kamae=envuelve por
+# fuera, 垂れ tare=cuelga desde arriba-izquierda, 繞 nyo=envuelve por
+# abajo-izquierda como ⻌) traducido al vocabulario que ya usa el resto
+# del pipeline (mismo que las operaciones IDS de decompose_ids()).
+KANJIVG_POSITION_MAP = {
+    'kamae': 'enclosure', 'kamaec': 'inside',
+    'tare': 'enclosure', 'tarec': 'inside',
+    'nyo': 'enclosure', 'nyoc': 'inside',
+    'middle': 'center',
+}
+
+
+def load_kanjivg():
+    """glyph -> [(componente, posicion, pista_fonetica)] usando SOLO el
+    primer nivel de anidacion (los componentes propios del caracter, no
+    los sub-componentes de esos componentes)."""
+    tree = ET.parse(SOURCES_DIR / 'kanjivg.xml')
+    by_glyph = {}
+    for kanji_el in tree.getroot():
+        root_g = kanji_el.find('g')
+        if root_g is None:
+            continue
+        glyph = root_g.get(KANJIVG_NS + 'element')
+        if not glyph:
+            continue
+        parts = []
+        for child in root_g:
+            if child.tag != 'g':
+                continue
+            comp = child.get(KANJIVG_NS + 'element')
+            if not comp or comp == glyph:
+                continue
+            pos = child.get(KANJIVG_NS + 'position')
+            pos = KANJIVG_POSITION_MAP.get(pos, pos) if pos else 'component'
+            phon = child.get(KANJIVG_NS + 'phon')
+            parts.append((comp, pos, phon))
+        if parts:
+            by_glyph[glyph] = parts
+    return by_glyph
+
+
 def hsk_level_of(row):
     if not row:
         return None
@@ -368,11 +419,12 @@ def _resolve_ear(glyph, pos):
     return EAR_LEFT if 'left' in pos else EAR_RIGHT
 
 
-def components_of(glyph, mmh_by_glyph, mega_by_glyph):
+def components_of(glyph, mmh_by_glyph, mega_by_glyph, kanjivg_by_glyph):
     """[(componente, posicion, rol)] para un caracter compuesto, o [] si
     es atomico. Prioriza Make Me a Hanzi (posicion real + rol
-    semantico/fonetico via su etimologia); mega_hanzi es el respaldo
-    (lista plana, sin posicion) para formas que no esten ahi."""
+    semantico/fonetico via su etimologia); mega_hanzi es el respaldo 1
+    (lista plana, sin posicion); KanjiVG es el respaldo 2, especifico
+    de Japon, para formas shinjitai que ninguna fuente china cubre."""
     mmh = mmh_by_glyph.get(glyph)
     if mmh and mmh.get('decomposition'):
         leaves = [(g, p) for g, p in decompose_ids(mmh['decomposition']) if g != glyph]
@@ -387,6 +439,9 @@ def components_of(glyph, mmh_by_glyph, mega_by_glyph):
         parts = [p for p in parts if p != glyph]
         if len(parts) >= 2:
             return [(_resolve_ear(p, 'component'), 'component', 'sem') for p in parts]
+    kvg_parts = kanjivg_by_glyph.get(glyph)
+    if kvg_parts:
+        return [(_resolve_ear(g, pos), pos, 'phon' if phon else 'sem') for g, pos, phon in kvg_parts]
     return []
 
 
@@ -447,6 +502,7 @@ def build():
     jouyou = load_jouyou()
     mega_by_glyph = load_mega_hanzi()
     mmh_by_glyph = load_mmh_dictionary()
+    kanjivg_by_glyph = load_kanjivg()
 
     ja_worst = max(v['freq'] for v in jouyou.values() if v.get('freq') is not None)
     zh_worst = max(
@@ -547,7 +603,7 @@ def build():
     edges_final = []
 
     def add_edges_for(owner_glyph, owner_id):
-        for comp_glyph, pos, role in components_of(owner_glyph, mmh_by_glyph, mega_by_glyph):
+        for comp_glyph, pos, role in components_of(owner_glyph, mmh_by_glyph, mega_by_glyph, kanjivg_by_glyph):
             edges_final.append({
                 'from': resolve_component_id(comp_glyph), 'to': owner_id,
                 'pos': pos, 'role': role,

@@ -133,6 +133,7 @@ export default function App() {
           onClose={() => setSelectedId(null)}
           onSelect={(id) => selectAndCenter(id)}
           onStudyChange={refreshDueCount}
+          langFilter={filters.lang}
         />
       </div>
       <NotesVault

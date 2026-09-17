@@ -3,6 +3,7 @@ import { addManyToStudy } from '../api/client'
 import { CATEGORY_INFO, ROLE_LABEL } from '../graph/constants'
 import { useNotes } from '../hooks/useNotes'
 import { useStudyStar } from '../hooks/useStudyStar'
+import { canSpeak, preferredLang, speak } from '../utils/speech'
 
 function kindLine(n) {
   if (n.kind === 'radical') {
@@ -19,7 +20,7 @@ function kindLine(n) {
   return 'Componente fonético (fuera de la lista de radicales)'
 }
 
-export default function DetailPanel({ node, nodesById, adjacency, onClose, onSelect, onStudyChange }) {
+export default function DetailPanel({ node, nodesById, adjacency, onClose, onSelect, onStudyChange, langFilter }) {
   const notes = useNotes(node?.id, node?.glyph)
   const star = useStudyStar(node?.id, node?.glyph)
   if (!node) return <div className="panel" />
@@ -46,6 +47,15 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
             {node.meaning || (node.kind === 'extra' ? '(componente sin ficha propia todavía)' : '—')}
           </div>
         </div>
+        {canSpeak() && (
+          <button
+            className="panel-speak"
+            title="Leer en voz alta"
+            onClick={() => speak(node.glyph, preferredLang(node, langFilter))}
+          >
+            🔊
+          </button>
+        )}
         <button className="panel-close" onClick={onClose}>
           ✕
         </button>
