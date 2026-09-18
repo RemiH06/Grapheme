@@ -277,7 +277,7 @@ export default function StudyMode({ open, onClose, nodesById, langFilter }) {
                   </div>
                 )}
                 <div className="badges" style={{ justifyContent: 'center' }}>
-                  {node.kind === 'radical' && (
+                  {node.category && (
                     <span className="badge cat" style={{ background: `var(${CATEGORY_INFO[node.category].varName})` }}>
                       {CATEGORY_INFO[node.category].label}
                     </span>

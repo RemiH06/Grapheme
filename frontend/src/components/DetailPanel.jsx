@@ -88,7 +88,7 @@ export default function DetailPanel({ node, nodesById, adjacency, onClose, onSel
         </button>
 
         <div className="badges">
-          {node.kind === 'radical' && (
+          {node.category && (
             <span className="badge cat" style={{ background: `var(${CATEGORY_INFO[node.category].varName})` }}>
               {CATEGORY_INFO[node.category].label}
             </span>

@@ -64,14 +64,17 @@ canvas + d3-force en React.
 
 ## Features
 
-- Grafo interactivo (canvas + d3-force) de 242 radicales, 3684
-  caracteres y ~7750 aristas dirigidas.
+- Grafo interactivo (canvas + d3-force) de 242 radicales, 3678
+  caracteres y ~7740 aristas dirigidas.
 - Distingue conexiones semánticas de fonéticas (línea sólida vs.
   punteada) con flecha componente → contenedor al seleccionar un nodo.
 - Filtro por idioma (japonés / chino / ambos) y por nivel (JLPT N5-N3
   + HSK 1-6 por default; catálogo completo con un toggle).
-- Leyenda de categorías semánticas (Humano, Cuerpo, Naturaleza...),
-  togglable por categoría.
+- Leyenda de 9 dominios semánticos (Personas, Cuerpo, Lugares,
+  Naturaleza, Comida, Animales, Objetos, Acciones, Abstracto),
+  togglable por dominio; cada carácter hereda el dominio de su radical
+  indexador real, no solo los radicales están coloreados (ver
+  `docs/METODOLOGIA.md` sección 9).
 - Búsqueda por glifo, lectura o significado.
 - Panel de detalle: lecturas, significado, qué tan común es (percentil
   de frecuencia real de corpus, no inventado), de qué se compone un
@@ -95,8 +98,9 @@ canvas + d3-force en React.
 - Recuperar el sistema de nivel/mnemónico del Excel original (ver
   `steps.md`): existía una progresión de aprendizaje pensada a mano
   que se perdió al conectar el catálogo externo.
-- Clustering real sobre la estructura del grafo para verificar (o
-  reemplazar) las categorías semánticas asignadas a mano en el Excel.
+- Revisar uno por uno el ~1.9% de caracteres que quedaron sin dominio
+  semántico resoluble, para cerrar ese residuo a cero (ver
+  `docs/METODOLOGIA.md` sección 9 y `steps.md`).
 - Alineación de trazos tolerante a errores en el quiz de trazado (ver
   `steps.md`), para que partir un trazo por accidente no desalinee la
   calificación del resto.

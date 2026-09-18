@@ -13,7 +13,7 @@ pipeline paralelo de trazos: `data/build_strokes.py` →
 |---|---|---|
 | Los 243 radicales (glifo, variantes) | Excel, hoja "Kanji", tabla "Approach" | `parse_excel()` + `MERGE_INTO` |
 | Conteo de trazos por radical | Excel (columna Type/Class) | `parse_excel()` |
-| Categoría semántica (Humano/Cuerpo/Naturaleza...) | Excel, matriz de filas 5-22 | `parse_excel()`, diccionario `category_of` |
+| Dominio semántico (Personas/Cuerpo/Naturaleza...) | **Ya no viene del Excel** (ver sección 9), reclasificado a mano por significado real | `DOMAIN_MAP` en `build_dataset.py` |
 | Significado en inglés de cada radical | **Escrito a mano por Claude**, la columna del Excel estaba vacía salvo 一 | `RADICAL_MEANING` |
 | Tipo de trazo base (横/竖/点/撇/折/钩) | **Añadido por Claude**, no existía en el Excel; solo cubre los 6 radicales de 1 trazo | `STROKE_TYPES` |
 | Lecturas on'yomi/kun'yomi/pinyin/JLPT/HSK/frecuencia de TODOS los caracteres | **100% fuentes externas** (sección 3) | `load_jouyou()`, `load_mega_hanzi()` |
@@ -184,8 +184,8 @@ corpus: no un número inventado, y japonés/chino no son comparables
     un compuesto real fuera de catálogo.
   - 齊 dejó de estar aislado: se fusionó con su forma simplificada 齐
     (sección 2), que sí es HSK 3 y aparece en 济/剂/挤.
-- **111 de 242 radicales sin categoría semántica**: así estaba tu
-  matriz original, nunca se completó.
+- **~70 caracteres (1.9%) sin dominio semántico resoluble**: ver
+  sección 9 para el porqué y el mecanismo completo de clasificación.
 - **Tier / nombres de nivel del Excel**: parseados parcialmente,
   no conectados a la UI (ver sección 1).
 - **La marca "remove" (鬥)** del Excel original nunca se resolvió:
@@ -283,3 +283,83 @@ Dos fuentes en cascada:
   "oportunidades" de coincidir por pura densidad de puntos. De paso
   resuelve el costo de comparar ~2865 candidatos (una búsqueda completa
   corre en ~200ms).
+
+## 9. Dominios semánticos: clasificación directa, no clustering
+
+Las categorías originales (Humano, Cuerpo, Naturaleza, Comida,
+Animales, Objetos, Vida, Estructural...) venían de una matriz que el
+usuario llenó a mano en `Pictograms.xlsx`, y solo cubrían 131 de 242
+radicales: era una clasificación subjetiva de una versión temprana del
+proyecto, nunca completada, y los caracteres compuestos no tenían
+categoría en absoluto (todos los nodos compuestos se pintaban del
+mismo gris en el lienzo).
+
+### 9.1 Por qué no terminamos usando clustering
+
+El primer intento fue detección de comunidades sobre el grafo real
+(Louvain, `networkx.community.louvain_communities`), probado en dos
+variantes: comunidades sobre los 242 radicales directamente, y sobre
+una proyección ponderada (Newman) del grafo bipartito
+radical-carácter, agrupando así los ~3700 caracteres compuestos por
+similitud de qué radicales comparten. Se revisaron los resultados en
+un documento publicado con los 52-53 clusters encontrados.
+
+El usuario rechazó el resultado explícitamente tras revisarlo: los
+clusters salían de tamaño muy desigual (algunos con un solo carácter,
+otros enormes), varias agrupaciones no eran intuitivas para alguien
+estudiando el idioma (mezclaba dominios que no tienen relación de
+significado real, solo coincidencia estructural en el grafo), y de
+todos modos habría necesitado ajuste manual para los casos borde. La
+conclusión fue que un clustering automático optimiza por estructura
+del grafo (qué tan conectados están los nodos entre sí), no por
+significado real, que es lo que de verdad importa para organizar el
+aprendizaje. Louvain no se descartó por un error de implementación:
+se descartó porque optimiza la pregunta equivocada para este caso de
+uso.
+
+### 9.2 El mecanismo adoptado: clasificar radicales, heredar caracteres
+
+En vez de inferir dominios de la estructura del grafo, se clasifican
+los 242 radicales directamente por su significado real en inglés
+(`RADICAL_MEANING`), a mano, uno por uno, en 9 dominios fijos:
+Personas, Cuerpo, Lugares, Naturaleza, Comida, Animales, Objetos,
+Acciones, Abstracto (`DOMAIN_MAP` en `build_dataset.py`, y
+`CATEGORY_INFO` en `frontend/src/graph/constants.js` para las
+etiquetas en español y el color de cada uno). Esta clasificación se
+revisó primero a nivel de conteo de radicales por dominio, y después a
+nivel de conteo de CARACTERES por dominio (no solo radicales), porque
+un dominio con pocos radicales pero que son componentes muy usados
+(ej. 水, agua) puede terminar representando a cientos de caracteres:
+la distribución final por caracteres fue Naturaleza 868, Cuerpo 778,
+Objetos 595, Personas 431, Lugares 261, Abstracto 240, Comida 149,
+Animales 148, Acciones 138.
+
+Cada carácter compuesto hereda su dominio del radical que
+**dictionary-wise** lo indexa, no del primer componente que aparezca
+en su descomposición: `resolve_anchor_radical()` usa primero el campo
+`radical` que el propio makemeahanzi trae por carácter (el radical
+tradicional de diccionario, el mismo criterio que usaría un diccionario
+de papel), resuelto a su forma canónica vía `MERGE_INTO` cuando
+corresponde. Solo si ese campo no existe o no resuelve a uno de los
+242 radicales reales, cae de regreso al primer componente real con rol
+`sem` en la descomposición (`components_of()`, sección 3). Ejemplo
+verificado: 河 (río) se compone de 水 (semántico, "agua") y 可
+(fonético, "poder"); el radical de diccionario es 水, así que 河
+hereda Naturaleza de 水, no de 可.
+
+`MERGE_INTO` se extendió con 11 pares adicionales específicamente
+porque el campo `radical` de makemeahanzi a veces usa la forma
+simplificada donde el catálogo de 242 radicales solo tiene la
+tradicional (o viceversa): `马→馬, 车→車, 见→見, 贝→貝, 龙→竜, 耂→⺹,
+⺗→心, 攴→攵, 肀→聿, 玉→王, ⺊→卜`. Sin estos, esos caracteres se habrían
+quedado sin dominio aunque su radical real sí esté clasificado, solo
+que bajo el otro codepoint.
+
+El residuo final de ~70 caracteres (1.9%) sin dominio resoluble son
+casos donde ni el campo `radical` de makemeahanzi resuelve a uno de los
+242 canónicos ni hay ningún componente real con rol semántico
+registrado en ninguna fuente (ej. 刁, 勲, 区, 匿, 危): se dejan sin
+`category` (`null`) en vez de forzar una categoría arbitraria; la UI
+(`DetailPanel.jsx`, `StudyMode.jsx`) simplemente no muestra el badge de
+dominio cuando `category` es `null`, sin caerse ni mostrar un valor
+inventado.

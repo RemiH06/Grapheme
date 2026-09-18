@@ -37,20 +37,32 @@ const CORE_HSK_MAX = 6
 
 /** "Core" = JLPT N5-N3 o HSK 1-6: lo que de verdad se estudia para la
  * certificacion. El resto (N2/N1, HSK 7-9) existe en los datos pero
- * queda oculto por defecto para que el grafo no se sature. */
+ * queda oculto por defecto para que el grafo no se sature. No depende
+ * de `langs` (los radicales no tienen ese campo) porque jlpt/hsk ya
+ * vienen vacios cuando el idioma correspondiente no aplica. */
 function isCore(n) {
-  const jaCore = n.langs?.includes('ja') && CORE_JLPT.has(n.jlpt)
-  const zhCore = n.langs?.includes('zh') && n.hsk != null && n.hsk <= CORE_HSK_MAX
+  const jaCore = CORE_JLPT.has(n.jlpt)
+  const zhCore = n.hsk != null && n.hsk <= CORE_HSK_MAX
   return jaCore || zhCore
 }
 
 function computeVisible(nodesById, adjacency, lang, showAllRadicals, levelFilter) {
   const keep = new Set()
   for (const n of nodesById.values()) {
-    if (n.kind !== 'compound') continue
-    if (lang !== 'all' && !n.langs.includes(lang)) continue
-    if (levelFilter === 'core' && !isCore(n)) continue
-    keep.add(n.id)
+    if (n.kind === 'compound') {
+      if (lang !== 'all' && !n.langs.includes(lang)) continue
+      if (levelFilter === 'core' && !isCore(n)) continue
+      keep.add(n.id)
+    } else if (n.kind === 'radical' && n.isCharacter && levelFilter === 'core' && isCore(n)) {
+      // Radical que TAMBIEN es su propio caracter jouyou/HSK (ej. 赤 N4,
+      // 長 N5, 風 N4): se muestra por si mismo en modo "core" aunque
+      // ninguno de sus compuestos dependientes sea core (antes solo se
+      // mostraba si algun compuesto vecino lo arrastraba, escondiendo
+      // caracteres basicos reales -- 19 radicales tenian este problema).
+      const hasJa = !!n.jlpt
+      const hasZh = n.hsk != null
+      if (lang === 'all' || (lang === 'ja' && hasJa) || (lang === 'zh' && hasZh)) keep.add(n.id)
+    }
   }
   for (const id of Array.from(keep)) {
     for (const nb of adjacency.get(id)) {
@@ -139,7 +151,7 @@ const RadicalGraph = forwardRef(function RadicalGraph(
       const r = radiusOf(n)
       const isSel = selected && n.id === selected.id
       const isNeighbor = neighborIds && neighborIds.has(n.id)
-      const categoryDimmed = n.kind === 'radical' && !activeCategories.has(n.category)
+      const categoryDimmed = !!n.category && !activeCategories.has(n.category)
       const dim = selected ? !(isSel || isNeighbor) : categoryDimmed
 
       ctx.beginPath()
@@ -152,7 +164,7 @@ const RadicalGraph = forwardRef(function RadicalGraph(
         ctx.globalAlpha = 1
         continue
       }
-      ctx.fillStyle = n.kind === 'radical' ? cssVar(CATEGORY_INFO[n.category].varName) : cssVar('--ink-soft')
+      ctx.fillStyle = n.category ? cssVar(CATEGORY_INFO[n.category].varName) : cssVar('--ink-soft')
       ctx.globalAlpha = dim ? 0.16 : 0.93
       ctx.fill()
       if (isSel) {

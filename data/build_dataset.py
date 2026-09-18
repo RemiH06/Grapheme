@@ -266,6 +266,13 @@ MERGE_INTO = {
     # quedaba aislado del grafo aunque 济/剂/挤 (HSK) sí lo usan como
     # fonetico -- solo que codificado como 齐, no como 齊.
     '齐': '齊',
+    # Encontrados al resolver el radical de indexacion real (el campo
+    # "radical" que trae makemeahanzi por caracter, usado para asignarle
+    # un dominio semantico a cada compuesto): mas variantes simplificadas
+    # o formas recortadas que nunca hicieron falta para la descomposicion
+    # en si, pero que makemeahanzi si usa como radical de un caracter.
+    '马': '馬', '车': '車', '见': '見', '贝': '貝', '龙': '竜',
+    '耂': '⺹', '⺗': '心', '攴': '攵', '肀': '聿', '玉': '王', '⺊': '卜',
 }
 
 # El radical de "oreja" (阝) es ambiguo sin ver la posicion: a la
@@ -487,6 +494,88 @@ def pick_illustrative_example(glyph, mega_by_glyph):
     return best
 
 
+# Dominio semantico de cada uno de los 242 radicales canonicos, asignado
+# a mano por el significado real de cada uno (ver docs/METODOLOGIA.md):
+# nada de clustering automatico -- se probo agrupar los ~3684 caracteres
+# por co-ocurrencia de radicales compartidos (Louvain) y salio disparejo
+# e in-intuitivo (clusters de 1 caracter junto a otros de 200+, dificil
+# de nombrar). Los radicales son solo 242 y ya vienen con un significado
+# real en ingles (RADICAL_MEANING), asi que clasificarlos directamente
+# es mas simple, mas intuitivo y mas facil de auditar a mano.
+DOMAIN_MAP = {
+    '一': 'Abstract', '｜': 'Abstract', '丶': 'Abstract', 'ノ': 'Abstract', '乙': 'Abstract',
+    '亅': 'Abstract', '二': 'Abstract', '亠': 'Objects', '人': 'People', '儿': 'Body',
+    '入': 'Actions', 'ハ': 'Abstract', '丷': 'Abstract', '冂': 'Places', '冖': 'Objects',
+    '冫': 'Nature', '几': 'Objects', '凵': 'Objects', '刀': 'Objects', '力': 'Abstract',
+    '勹': 'Actions', '匕': 'Objects', '匚': 'Objects', '十': 'Abstract', '卜': 'Abstract',
+    '卩': 'People', '厂': 'Places', '厶': 'Abstract', '又': 'Actions', 'マ': 'Abstract',
+    '九': 'Abstract', 'ユ': 'Abstract', '乃': 'Abstract', '𠂉': 'Abstract', '⻌': 'Places',
+    '口': 'Body', '囗': 'Places', '土': 'Nature', '士': 'People', '夂': 'Actions',
+    '夕': 'Nature', '大': 'Abstract', '女': 'People', '子': 'People', '宀': 'Places',
+    '寸': 'Abstract', '小': 'Abstract', '尢': 'Body', '尸': 'Body', '屮': 'Nature',
+    '山': 'Nature', '川': 'Nature', '巛': 'Nature', '工': 'Objects', '已': 'Abstract',
+    '巾': 'Objects', '干': 'Abstract', '幺': 'Objects', '广': 'Places', '廴': 'Actions',
+    '廾': 'Actions', '弋': 'Objects', '弓': 'Objects', 'ヨ': 'Animals', '彑': 'Animals',
+    '彡': 'Body', '彳': 'Actions', '⺾': 'Nature', '⻏': 'Places', '⻖': 'Nature',
+    '也': 'Abstract', '亡': 'Abstract', '及': 'Actions', '久': 'Abstract', '⺹': 'People',
+    '心': 'Body', '戈': 'Objects', '戸': 'Places', '手': 'Body', '支': 'Nature',
+    '攵': 'Actions', '文': 'People', '斗': 'Abstract', '斤': 'Objects', '方': 'Abstract',
+    '无': 'Abstract', '日': 'Nature', '曰': 'People', '月': 'Nature', '木': 'Nature',
+    '欠': 'Body', '止': 'Actions', '歹': 'Abstract', '殳': 'Actions', '比': 'Abstract',
+    '毛': 'Animals', '氏': 'People', '气': 'Nature', '水': 'Nature', '火': 'Nature',
+    '爪': 'Body', '父': 'People', '爻': 'Abstract', '爿': 'Objects', '片': 'Objects',
+    '牛': 'Animals', '犬': 'Animals', '王': 'Objects', '元': 'Abstract', '井': 'Places',
+    '勿': 'Abstract', '尤': 'Abstract', '五': 'Abstract', '屯': 'Places', '巴': 'Abstract',
+    '毋': 'Abstract', '玄': 'Abstract', '瓦': 'Objects', '甘': 'Food', '生': 'People',
+    '用': 'Abstract', '田': 'Food', '疋': 'Objects', '疒': 'Body', '癶': 'Actions',
+    '白': 'Nature', '皮': 'Animals', '皿': 'Objects', '目': 'Body', '矛': 'Objects',
+    '矢': 'Objects', '石': 'Nature', '示': 'People', '禸': 'Animals', '禾': 'Food',
+    '穴': 'Places', '立': 'Actions', '世': 'People', '巨': 'Abstract', '冊': 'Objects',
+    '母': 'People', '⺲': 'Objects', '牙': 'Animals', '瓜': 'Food', '竹': 'Nature',
+    '米': 'Food', '糸': 'Objects', '缶': 'Objects', '羊': 'Animals', '羽': 'Animals',
+    '而': 'Abstract', '耒': 'Food', '耳': 'Body', '聿': 'Objects', '肉': 'Body',
+    '自': 'People', '至': 'Abstract', '臼': 'Objects', '舌': 'Body', '舟': 'Objects',
+    '艮': 'Abstract', '色': 'Abstract', '虍': 'Animals', '虫': 'Animals', '血': 'Body',
+    '行': 'Actions', '衣': 'Objects', '西': 'Abstract', '臣': 'People', '見': 'Body',
+    '角': 'Animals', '言': 'People', '谷': 'Nature', '豆': 'Food', '豕': 'Animals',
+    '豸': 'Animals', '貝': 'Objects', '赤': 'Nature', '走': 'Actions', '足': 'Body',
+    '身': 'Body', '車': 'Objects', '辛': 'Food', '辰': 'Abstract', '酉': 'Food',
+    '釆': 'Abstract', '里': 'Places', '舛': 'Actions', '麦': 'Food', '金': 'Objects',
+    '長': 'Abstract', '門': 'Places', '隶': 'People', '隹': 'Animals', '雨': 'Nature',
+    '青': 'Nature', '非': 'Abstract', '奄': 'Abstract', '岡': 'Nature', '免': 'Abstract',
+    '斉': 'Abstract', '面': 'Body', '革': 'Objects', '韭': 'Food', '音': 'People',
+    '頁': 'Body', '風': 'Nature', '飛': 'Actions', '食': 'Food', '首': 'Body',
+    '香': 'Food', '品': 'Objects', '馬': 'Animals', '骨': 'Body', '高': 'Abstract',
+    '髟': 'Body', '鬥': 'Actions', '鬯': 'Objects', '鬲': 'Objects', '鬼': 'Abstract',
+    '竜': 'Animals', '韋': 'Objects', '魚': 'Animals', '鳥': 'Animals', '鹵': 'Nature',
+    '鹿': 'Animals', '麻': 'Nature', '亀': 'Animals', '啇': 'Abstract', '黄': 'Nature',
+    '黒': 'Nature', '黹': 'Objects', '無': 'Abstract', '歯': 'Body', '黽': 'Animals',
+    '鼎': 'Objects', '鼓': 'Objects', '鼠': 'Animals', '鼻': 'Body', '齊': 'Abstract',
+    '龠': 'Objects', '黍': 'Food',
+}
+
+
+def resolve_anchor_radical(glyph, mmh_by_glyph, mega_by_glyph, kanjivg_by_glyph, canonical_glyphs):
+    """El radical de indexacion real de un caracter (el mismo que usan
+    los diccionarios de papel), resuelto a uno de los 242 canonicos, para
+    asignarle un dominio semantico. Prioriza el campo "radical" que trae
+    makemeahanzi; si no esta o no resuelve a uno canonico (variante que
+    MERGE_INTO no cubre, o un radical fuera de nuestros 242), cae al
+    primer componente SEMANTICO real de components_of()."""
+    mmh = mmh_by_glyph.get(glyph)
+    if mmh and mmh.get('radical'):
+        cand = MERGE_INTO.get(mmh['radical'], mmh['radical'])
+        if cand in canonical_glyphs:
+            return cand
+    for comp_glyph, pos, role in components_of(glyph, mmh_by_glyph, mega_by_glyph, kanjivg_by_glyph):
+        if role != 'sem':
+            continue
+        cand = MERGE_INTO.get(comp_glyph, comp_glyph)
+        if cand in canonical_glyphs:
+            return cand
+    return None
+
+
 def pct_rank(rank, worst_rank):
     """Percentil 0-100 dentro de SU PROPIO corpus (japones y chino no son
     comparables entre si en una sola escala; cada uno usa su propio rango
@@ -519,11 +608,14 @@ def build():
             node['variants'].append(g)
         if rec.get('strokeCount') is not None and node['strokeCount'] is None:
             node['strokeCount'] = rec['strokeCount']
-        if rec.get('category') and node['category'] is None:
-            node['category'] = rec['category']
+        if node['category'] is None:
+            node['category'] = DOMAIN_MAP.get(target)
+        if rec.get('tier') is not None and node['tier'] is None:
             node['tier'] = rec.get('tier')
         if not node['meaning']:
             node['meaning'] = RADICAL_MEANING.get(target)
+
+    canonical_glyphs = set(canonical.keys())
 
     # ---- 2) catalogo completo de kanji joyo + hanzi HSK 3.0 ----
     jouyou = load_jouyou()
@@ -590,11 +682,13 @@ def build():
             continue  # ni joyo ni HSK (solo aparecio como fila de mega_hanzi sin nivel)
 
         cid = f"c{len(compound_order) + 1:05d}"
+        anchor = resolve_anchor_radical(glyph, mmh_by_glyph, mega_by_glyph, kanjivg_by_glyph, canonical_glyphs)
         data = {
             'id': cid, 'glyph': glyph, 'isCharacter': True, 'isRadical': False,
             'onyomi': onyomi, 'kunyomi': kunyomi, 'pinyin': pinyin, 'meaning': meaning,
             'jlpt': jlpt, 'hsk': zh_level, 'langs': langs,
             'freqJa': freq_ja, 'freqZh': freq_zh,
+            'category': DOMAIN_MAP.get(anchor) if anchor else None,
         }
         characters_final.append(data)
         compound_id_by_glyph[glyph] = cid

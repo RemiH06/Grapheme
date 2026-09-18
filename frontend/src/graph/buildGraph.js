@@ -1,5 +1,3 @@
-import { CATEGORY_FOLD } from './constants'
-
 /**
  * Convierte la respuesta cruda de /api/graph (radicales, caracteres
  * compuestos, componentes fonéticos "extra" y aristas) en las
@@ -15,7 +13,7 @@ export function buildGraph(raw) {
       id: r.id,
       glyph: r.glyph,
       kind: 'radical',
-      category: CATEGORY_FOLD[r.category] || 'Structural',
+      category: r.category || null,
       strokeCount: r.strokeCount,
       strokeType: r.strokeType,
       strokeTypeName: r.strokeTypeName,
@@ -39,6 +37,7 @@ export function buildGraph(raw) {
       id: c.id,
       glyph: c.glyph,
       kind: 'compound',
+      category: c.category || null,
       onyomi: c.onyomi,
       kunyomi: c.kunyomi,
       pinyin: c.pinyin,
