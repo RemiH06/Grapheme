@@ -29,6 +29,7 @@
   --cat-objects: #1baf7a;
   --cat-life: #e87ba4;
   --cat-structural: #928c7d;
+  --cat-other: #6b7280;
   --edge: #bdc1c8;
   --shadow: rgba(20, 22, 30, 0.16);
 }
@@ -58,6 +59,7 @@
     --cat-objects: #199e70;
     --cat-life: #d55181;
     --cat-structural: #85806f;
+    --cat-other: #9099a8;
     --edge: #383b42;
     --shadow: rgba(0, 0, 0, 0.45);
   }

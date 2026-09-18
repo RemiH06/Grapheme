@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, forceX, forceY } from 'd3-force'
-import { CATEGORY_INFO } from '../graph/constants'
+import { CATEGORY_INFO, OTHER_CATEGORY_KEY } from '../graph/constants'
 
 function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
@@ -46,7 +46,46 @@ function isCore(n) {
   return jaCore || zhCore
 }
 
-function computeVisible(nodesById, adjacency, lang, showAllRadicals, levelFilter) {
+/** Los nodos sin dominio real (el residuo de caracteres sin radical
+ * indexador resoluble, y los componentes "extra" fuera de la lista de
+ * radicales) caen en el cajon virtual OTHER_CATEGORY_KEY: se tratan
+ * como una categoria mas, togglable igual que las demas. Antes no
+ * tenian categoria en absoluto y por eso `isCategoryDimmed` los daba
+ * siempre por "no apagados", lo que los volvia puentes gratis: un
+ * radical de una categoria apagada se quedaba visible solo por tocar
+ * alguno de estos ~389 nodos sin relacion real con lo que el usuario
+ * si queria ver. */
+function categoryKeyOf(n) {
+  return n.category || OTHER_CATEGORY_KEY
+}
+
+function isCategoryDimmed(n, activeCategories) {
+  return !activeCategories.has(categoryKeyOf(n))
+}
+
+/** Un nodo apagado por categoria desaparece del todo salvo que sea un
+ * puente necesario: si al menos uno de sus vecinos directos SI se va a
+ * mostrar con normalidad (su categoria, real o el cajon OTHER, esta
+ * activa), se queda (opacado, como antes) para no dejar ese vecino con
+ * una conexion que apunta a la nada. Solo se checa un salto: un nodo
+ * apagado que cuelga de OTRO nodo apagado (sin tocar nada visible
+ * directamente) si desaparece, aunque ese otro se quede como puente. */
+function dropUnnecessaryDimmed(keep, nodesById, adjacency, activeCategories) {
+  const toRemove = []
+  for (const id of keep) {
+    const n = nodesById.get(id)
+    if (!isCategoryDimmed(n, activeCategories)) continue
+    const isBridge = adjacency.get(id).some((nb) => {
+      if (!keep.has(nb.id)) return false
+      return !isCategoryDimmed(nodesById.get(nb.id), activeCategories)
+    })
+    if (!isBridge) toRemove.push(id)
+  }
+  for (const id of toRemove) keep.delete(id)
+  return keep
+}
+
+function computeVisible(nodesById, adjacency, lang, showAllRadicals, levelFilter, activeCategories) {
   const keep = new Set()
   for (const n of nodesById.values()) {
     if (n.kind === 'compound') {
@@ -77,6 +116,7 @@ function computeVisible(nodesById, adjacency, lang, showAllRadicals, levelFilter
   if (showAllRadicals) {
     for (const n of nodesById.values()) if (n.kind === 'radical') keep.add(n.id)
   }
+  if (activeCategories) dropUnnecessaryDimmed(keep, nodesById, adjacency, activeCategories)
   return keep
 }
 
@@ -151,7 +191,7 @@ const RadicalGraph = forwardRef(function RadicalGraph(
       const r = radiusOf(n)
       const isSel = selected && n.id === selected.id
       const isNeighbor = neighborIds && neighborIds.has(n.id)
-      const categoryDimmed = !!n.category && !activeCategories.has(n.category)
+      const categoryDimmed = isCategoryDimmed(n, activeCategories)
       const dim = selected ? !(isSel || isNeighbor) : categoryDimmed
 
       ctx.beginPath()
@@ -164,7 +204,7 @@ const RadicalGraph = forwardRef(function RadicalGraph(
         ctx.globalAlpha = 1
         continue
       }
-      ctx.fillStyle = n.category ? cssVar(CATEGORY_INFO[n.category].varName) : cssVar('--ink-soft')
+      ctx.fillStyle = cssVar(CATEGORY_INFO[categoryKeyOf(n)].varName)
       ctx.globalAlpha = dim ? 0.16 : 0.93
       ctx.fill()
       if (isSel) {
@@ -320,7 +360,14 @@ const RadicalGraph = forwardRef(function RadicalGraph(
 
   // ---- reconstruir la simulacion cuando cambian los datos o el filtro ----
   useEffect(() => {
-    const visible = computeVisible(nodesById, adjacency, filters.lang, filters.showAllRadicals, filters.levelFilter)
+    const visible = computeVisible(
+      nodesById,
+      adjacency,
+      filters.lang,
+      filters.showAllRadicals,
+      filters.levelFilter,
+      filters.activeCategories,
+    )
     const activeNodes = Array.from(visible).map((id) => nodesById.get(id))
     const idSet = new Set(activeNodes.map((n) => n.id))
     const activeEdges = edges.filter((e) => {
@@ -372,7 +419,7 @@ const RadicalGraph = forwardRef(function RadicalGraph(
     }
 
     return () => sim.stop()
-  }, [nodesById, edges, adjacency, filters.lang, filters.showAllRadicals, filters.levelFilter])
+  }, [nodesById, edges, adjacency, filters.lang, filters.showAllRadicals, filters.levelFilter, filters.activeCategories])
 
   // ---- redibujar (sin re-simular) cuando cambia la seleccion o las categorias activas ----
   useEffect(() => {

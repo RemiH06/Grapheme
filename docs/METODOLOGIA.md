@@ -233,10 +233,22 @@ Dos fuentes en cascada:
   comparables sin importar el tamaño real del canvas ni la velocidad
   de trazo.
 - **Quiz de trazado** (`StudyMode.jsx`, modo "Dibujar"): compara el
-  trazo N dibujado contra el trazo N real, **a propósito por posición**:
-  el objetivo es evaluar si el orden de escritura es el correcto, no
-  solo si la forma final se parece. Ver `steps.md` por el límite
-  conocido (un trazo partido a la mitad desalinea todo lo que sigue).
+  trazo dibujado contra el trazo real, **a propósito sensible al
+  orden**: el objetivo es evaluar si el orden de escritura es el
+  correcto, no solo si la forma final se parece. `alignStrokes()` en
+  `utils/strokeMatch.js` alinea ambas secuencias con una variante de
+  distancia de edición (emparejar, insertar o borrar un trazo, nunca
+  reordenar) en vez de comparar por índice fijo. Esto arregla un caso
+  real: levantar el lápiz a mitad de un trazo lo parte en dos, y con
+  índice fijo todo lo que seguía se comparaba contra el trazo real
+  equivocado (desde ahí en adelante, incluso trazos bien dibujados
+  cruzaban por completo el conteo, y el último trazo real ni siquiera
+  llegaba a compararse: el bucle antiguo se detenía en
+  `min(dibujados, reales)`). Con la alineación, el trazo de sobra se
+  detecta como tal (se pinta en rojo, cuenta como trazo extra) y el
+  resto de la secuencia se re-sincroniza sola. Sigue penalizando tener
+  más o menos trazos que los reales (`countPenalty`), pero ya no deja
+  que ese desfase arruine la comparación de todo lo que sigue.
 - **Encontrador de símbolos por dibujo** (`DrawFinder.jsx`): el sentido
   inverso, buscar qué carácter es a partir de un dibujo sin saber su
   nombre. Aquí el orden de trazo y en cuántos trazos se partió el
@@ -355,11 +367,69 @@ tradicional (o viceversa): `马→馬, 车→車, 见→見, 贝→貝, 龙→�
 quedado sin dominio aunque su radical real sí esté clasificado, solo
 que bajo el otro codepoint.
 
-El residuo final de ~70 caracteres (1.9%) sin dominio resoluble son
+El residuo final de **20 caracteres (0.5%)** sin dominio resoluble son
 casos donde ni el campo `radical` de makemeahanzi resuelve a uno de los
 242 canónicos ni hay ningún componente real con rol semántico
-registrado en ninguna fuente (ej. 刁, 勲, 区, 匿, 危): se dejan sin
+registrado en ninguna fuente (ej. 刁, 勲, 区, 匿, 呉): se dejan sin
 `category` (`null`) en vez de forzar una categoría arbitraria; la UI
 (`DetailPanel.jsx`, `StudyMode.jsx`) simplemente no muestra el badge de
 dominio cuando `category` es `null`, sin caerse ni mostrar un valor
-inventado.
+inventado. La mayoría son formas kyūjitai japonesas (勲営壱巻帯暦気発舎
+舗霊黙) que ni siquiera tienen entrada en makemeahanzi (fuente china), o
+radicales genuinamente ausentes de los 242 (匸, 己, 民, 旡, 巳).
+
+Este residuo bajó de ~70 (1.9%) a 20 en una segunda pasada: revisando
+uno por uno por qué fallaban, la mayoría (50 de 70) resultó ser el
+mismo caso ya conocido (campo `radical` apuntando a la forma
+simplificada cuando el catálogo de 242 solo tiene la tradicional o la
+shinjitai japonesa), así que se resolvió extendiendo `MERGE_INTO` con
+10 pares más: `门→門, 页→頁, 风→風, 鱼→魚, 鸟→鳥, 氺→水, 㔾→卩, 齿→歯,
+龟→亀, 飞→飛`. 飞/飛 es el mismo caso que 齐/齊 (sección 2): misma
+identidad léxica aunque las formas no se parezcan nada visualmente (por
+eso el trazo de 飞 sigue viniendo de makemeahanzi y no de KanjiVG, ver
+sección 8; para dominio semántico lo que importa es que es el mismo
+carácter, no el trazo).
+
+**Bug real encontrado al hacer esta extensión** (no exclusivo de los 10
+pares nuevos: ya afectaba a los 6 pares anteriores de la sección 2,
+`马/馬, 车/車, 见/見, 贝/貝, 龙/竜, 齐/齊`): cuando un carácter se funde en
+un nodo radical vía `MERGE_INTO` (`build()`, bloque "el carácter ES uno
+de nuestros 243 radicales"), los campos `jlpt`/`hsk`/`freqJa`/`freqZh`
+se sobreescribían sin condición. Si el mismo nodo recibía una pasada
+japonesa y otra china (el orden depende del codepoint, no está
+garantizado), la segunda pasada podía borrar con `None` lo que la
+primera ya había puesto. Confirmado con 馬: antes de este arreglo se
+quedaba con `jlpt=None` a pesar de ser N3, porque la pasada de 马
+(sin datos de jouyou) se procesaba después y pisaba el campo. Arreglado
+usando guardas (`if jlpt:`, `if zh_level is not None:`, etc.) en vez de
+asignación directa. De paso, estos merges tampoco guardaban la forma
+alterna en `variants`, así que buscar "马" en la app no encontraba nada
+(la búsqueda en `TopBar.jsx` no incluía `variants` en el texto
+comparado): ambos arreglos hicieron falta juntos para que 马, 车, 见,
+贝, 龙, 齐 y los 10 pares nuevos queden completos y encontrables por
+cualquiera de sus dos formas.
+
+### 9.3 El toggle "Sin categoría" y por qué hacía falta
+
+En el lienzo (`RadicalGraph.jsx`), apagar un dominio en la leyenda no
+solo opaca sus nodos: los quita del todo salvo que sean un puente
+directo hacia algún nodo que sigue visible con normalidad
+(`dropUnnecessaryDimmed()`). El residuo sin dominio (sección 9.2) y los
+~319 componentes "extra" (fonéticos fuera de la lista de 242 radicales)
+no traen ningún `category` en absoluto, así que al principio quedaban
+fuera de este mecanismo por completo: `isCategoryDimmed()` los daba
+siempre por "no apagados" sin importar qué dominios estuvieran activos.
+El efecto reportado por el usuario fue justo ese: radicales de un
+dominio apagado seguían apareciendo, "pegados" a alguno de estos ~389
+nodos sin relación real con el dominio que sí quería ver, y con los 9
+dominios apagados a la vez el grafo nunca llegaba a vaciarse del todo.
+
+El arreglo trata a estos ~389 nodos como un dominio virtual más
+(`OTHER_CATEGORY_KEY` en `constants.js`, con su propia entrada en
+`CATEGORY_INFO` y su chip "Sin categoría" en la leyenda,
+`--cat-other` en `theme/tokens.css`): `categoryKeyOf(n)` resuelve
+`n.category || OTHER_CATEGORY_KEY`, y tanto el apagado por opacidad
+como el filtro de "puente necesario" usan esa clave de forma uniforme,
+sin ningún caso especial. Apagar "Sin categoría" ahora los oculta igual
+que cualquier otro dominio (salvo que sean puente real), y apagar los
+10 dominios a la vez vacía el lienzo por completo.

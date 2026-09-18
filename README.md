@@ -64,17 +64,20 @@ canvas + d3-force en React.
 
 ## Features
 
-- Grafo interactivo (canvas + d3-force) de 242 radicales, 3678
-  caracteres y ~7740 aristas dirigidas.
+- Grafo interactivo (canvas + d3-force) de 242 radicales, 3670
+  caracteres y ~7725 aristas dirigidas.
 - Distingue conexiones semánticas de fonéticas (línea sólida vs.
   punteada) con flecha componente → contenedor al seleccionar un nodo.
 - Filtro por idioma (japonés / chino / ambos) y por nivel (JLPT N5-N3
   + HSK 1-6 por default; catálogo completo con un toggle).
 - Leyenda de 9 dominios semánticos (Personas, Cuerpo, Lugares,
-  Naturaleza, Comida, Animales, Objetos, Acciones, Abstracto),
-  togglable por dominio; cada carácter hereda el dominio de su radical
-  indexador real, no solo los radicales están coloreados (ver
-  `docs/METODOLOGIA.md` sección 9).
+  Naturaleza, Comida, Animales, Objetos, Acciones, Abstracto) más
+  "Sin categoría" para el residuo y los componentes fuera de la lista
+  de radicales, togglable por dominio; cada carácter hereda el dominio
+  de su radical indexador real, no solo los radicales están coloreados.
+  Apagar un dominio quita sus nodos del todo salvo que sean puente
+  necesario hacia algo que sigue visible (ver `docs/METODOLOGIA.md`
+  sección 9).
 - Búsqueda por glifo, lectura o significado.
 - Panel de detalle: lecturas, significado, qué tan común es (percentil
   de frecuencia real de corpus, no inventado), de qué se compone un
@@ -98,7 +101,7 @@ canvas + d3-force en React.
 - Recuperar el sistema de nivel/mnemónico del Excel original (ver
   `steps.md`): existía una progresión de aprendizaje pensada a mano
   que se perdió al conectar el catálogo externo.
-- Revisar uno por uno el ~1.9% de caracteres que quedaron sin dominio
+- Revisar uno por uno los 20 caracteres (0.5%) que quedaron sin dominio
   semántico resoluble, para cerrar ese residuo a cero (ver
   `docs/METODOLOGIA.md` sección 9 y `steps.md`).
 - Alineación de trazos tolerante a errores en el quiz de trazado (ver

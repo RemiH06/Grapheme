@@ -24,7 +24,7 @@ export default function TopBar({ nodesById, filters, setFilters, onSelectSearch,
   if (q) {
     for (const n of nodesById.values()) {
       if (hits.length >= 18) break
-      const hay = [n.glyph, n.onyomi, n.kunyomi, n.pinyin, n.meaning].map(norm).join(' ')
+      const hay = [n.glyph, ...(n.variants || []), n.onyomi, n.kunyomi, n.pinyin, n.meaning].map(norm).join(' ')
       if (hay.includes(q)) hits.push(n)
     }
   }

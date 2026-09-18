@@ -92,20 +92,77 @@ function distanceToScore(d) {
   return Math.max(0, Math.round(100 * (1 - d / DIST_FOR_ZERO_SCORE)))
 }
 
-/** Califica un trazado contra los trazos reales de un glifo, pareando
- * por orden (trazo 1 dibujado vs trazo 1 real, etc). Penaliza tener mas
- * o menos trazos de los reales en vez de ignorarlo. */
+// Costo de saltar un trazo de cualquiera de los dos lados en
+// alignStrokes(): ni tan barato que el algoritmo prefiera saltarse
+// trazos mediocres en vez de emparejarlos (perderia la sensibilidad al
+// contenido), ni tan caro que un trazo partido por accidente arrastre
+// mal a todo lo que sigue. A medio camino entre un trazo "bien" (dist
+// 0.05-0.15) y el umbral de score cero (DIST_FOR_ZERO_SCORE).
+const SKIP_COST = 0.22
+
+/** Alinea trazos dibujados contra los reales permitiendo saltar un
+ * trazo de cualquiera de los dos lados (tipo distancia de edicion:
+ * emparejar, insertar o borrar), en vez de solo comparar por posicion
+ * fija. Arregla el caso reportado: levantar el lapiz a mitad de un
+ * trazo lo parte en dos, y con emparejamiento estricto por indice todo
+ * lo que sigue se desalineaba con el trazo siguiente (real) y el
+ * puntaje se desplomaba aunque el dibujo real estuviera casi bien.
+ * Sigue siendo sensible al orden: no se permite reordenar trazos, solo
+ * saltarse alguno de cualquiera de los dos lados. */
+function alignStrokes(drawn, reference) {
+  const n = drawn.length
+  const m = reference.length
+  const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0))
+  for (let i = 1; i <= n; i++) dp[i][0] = i * SKIP_COST
+  for (let j = 1; j <= m; j++) dp[0][j] = j * SKIP_COST
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      const matchCost = dp[i - 1][j - 1] + strokeDistance(drawn[i - 1], reference[j - 1])
+      const insertCost = dp[i - 1][j] + SKIP_COST // drawn[i-1] no corresponde a nada real
+      const deleteCost = dp[i][j - 1] + SKIP_COST // reference[j-1] no se dibujo
+      dp[i][j] = Math.min(matchCost, insertCost, deleteCost)
+    }
+  }
+  const pairs = []
+  let i = n
+  let j = m
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && dp[i][j] === dp[i - 1][j - 1] + strokeDistance(drawn[i - 1], reference[j - 1])) {
+      pairs.push({ drawnIdx: i - 1, refIdx: j - 1 })
+      i--
+      j--
+    } else if (i > 0 && dp[i][j] === dp[i - 1][j] + SKIP_COST) {
+      pairs.push({ drawnIdx: i - 1, refIdx: null })
+      i--
+    } else {
+      pairs.push({ drawnIdx: null, refIdx: j - 1 })
+      j--
+    }
+  }
+  return pairs.reverse()
+}
+
+/** Califica un trazado contra los trazos reales de un glifo. Alinea con
+ * alignStrokes() en vez de emparejar por indice fijo, y sigue penalizando
+ * tener mas o menos trazos que los reales (un trazo saltado o de sobra
+ * SI importa para aprender a escribir bien), pero ya no deja que un
+ * salto de conteo tumbe la comparacion de todo lo que sigue. */
 export function scoreTracing(drawnRawStrokes, referenceStrokes) {
   const drawn = normalizeDrawnStrokes(drawnRawStrokes)
-  const n = Math.min(drawn.length, referenceStrokes.length)
-  const perStroke = []
-  for (let i = 0; i < n; i++) {
-    const d = strokeDistance(drawn[i], referenceStrokes[i])
-    perStroke.push(distanceToScore(d))
+  const pairs = alignStrokes(drawn, referenceStrokes)
+  const perStroke = new Array(drawn.length).fill(0)
+  const matchedScores = []
+  for (const p of pairs) {
+    if (p.drawnIdx == null) continue // trazo real sin trazo dibujado correspondiente
+    if (p.refIdx == null) continue // trazo dibujado extra: se deja en 0 (rojo)
+    const d = strokeDistance(drawn[p.drawnIdx], referenceStrokes[p.refIdx])
+    const score = distanceToScore(d)
+    perStroke[p.drawnIdx] = score
+    matchedScores.push(score)
   }
   const countDiff = Math.abs(drawn.length - referenceStrokes.length)
   const countPenalty = Math.min(40, countDiff * 15)
-  const base = perStroke.length ? perStroke.reduce((a, b) => a + b, 0) / perStroke.length : 0
+  const base = matchedScores.length ? matchedScores.reduce((a, b) => a + b, 0) / matchedScores.length : 0
   const overall = Math.max(0, Math.round(base - countPenalty))
   return { overall, perStroke, drawnCount: drawn.length, referenceCount: referenceStrokes.length }
 }

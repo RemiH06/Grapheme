@@ -273,6 +273,18 @@ MERGE_INTO = {
     # en si, pero que makemeahanzi si usa como radical de un caracter.
     '马': '馬', '车': '車', '见': '見', '贝': '貝', '龙': '竜',
     '耂': '⺹', '⺗': '心', '攴': '攵', '肀': '聿', '玉': '王', '⺊': '卜',
+    # Segunda tanda, encontrados al revisar por que ~70 caracteres se
+    # quedaban sin dominio (ver docs/METODOLOGIA.md seccion 9.2): mismo
+    # mecanismo, simplificado/variante -> canonico del catalogo de 242.
+    # 齿/龟 no resuelven a su propia forma tradicional (齒/龜, que no
+    # estan en el catalogo) sino a la forma japonesa shinjitai que si lo
+    # esta (歯/亀, ya usada por otros 19 radicales "core"). 飞/飛 son el
+    # mismo caso que 齐/齊: identidad lexica igual aunque la forma visual
+    # no se parezca en nada (por eso el trazo de 飞 sigue viniendo de
+    # makemeahanzi, no de kanjivg -- ver seccion 8 -- pero para dominio
+    # semantico lo que importa es que es el mismo caracter).
+    '门': '門', '页': '頁', '风': '風', '鱼': '魚', '鸟': '鳥',
+    '氺': '水', '㔾': '卩', '齿': '歯', '龟': '亀', '飞': '飛',
 }
 
 # El radical de "oreja" (阝) es ambiguo sin ver la posicion: a la
@@ -662,20 +674,36 @@ def build():
 
         target = MERGE_INTO.get(glyph, glyph)
         if target in canonical:
-            # el caracter ES uno de nuestros 243 radicales: se fusiona en
-            # ese nodo en vez de crear un duplicado (ej. 木, 人, 水, 好...
-            # no, 好 no es radical, pero 木/人/水 si lo son).
+            # el caracter ES uno de nuestros 243 radicales, o se funde en
+            # uno via MERGE_INTO (ej. 马 -> 馬, mismo caracter simplificado/
+            # tradicional): se fusiona en ese nodo en vez de crear un
+            # duplicado (ej. 木, 人, 水, 好... no, 好 no es radical, pero
+            # 木/人/水 si lo son). Cuando el merge SI cambio el glifo se
+            # guarda la forma alterna en "variants" (si no, 马/车/见/门/
+            # etc. dejaban de ser encontrables por busqueda: el nodo final
+            # solo conserva el glifo tradicional/shinjitai). Los campos de
+            # nivel/frecuencia nunca se sobreescriben con None: si el
+            # mismo nodo recibe una pasada japonesa y otra china (en
+            # cualquier orden, sorted() no lo garantiza), las dos deben
+            # sobrevivir -- antes procesar 马 despues de 馬 borraba el
+            # JLPT que la pasada de 馬 ya habia puesto.
             node = canonical[target]
             node['isCharacter'] = True
+            if glyph != target and glyph not in node['variants']:
+                node['variants'].append(glyph)
             node['onyomi'] = onyomi or node['onyomi']
             node['kunyomi'] = kunyomi or node['kunyomi']
             node['pinyin'] = pinyin or node['pinyin']
             if meaning:
                 node['meaning'] = meaning
-            node['jlpt'] = jlpt
-            node['hsk'] = zh_level
-            node['freqJa'] = freq_ja
-            node['freqZh'] = freq_zh
+            if jlpt:
+                node['jlpt'] = jlpt
+            if zh_level is not None:
+                node['hsk'] = zh_level
+            if freq_ja is not None:
+                node['freqJa'] = freq_ja
+            if freq_zh is not None:
+                node['freqZh'] = freq_zh
             continue  # ser radical no significa ser atomico -- ver mas abajo
 
         if not langs:
