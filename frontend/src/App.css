@@ -476,6 +476,152 @@ kbd {
 }
 .add-all-btn:hover { text-decoration: underline; }
 
+/* ---------- curador de componentes de radicales (/?curate=radicals) ---------- */
+.curator {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Zen Kaku Gothic New', 'Hiragino Sans', system-ui, sans-serif;
+  padding: 24px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+.curator-head h1 { font-size: 20px; margin: 0 0 8px; }
+.curator-head p { color: var(--muted); font-size: 13px; margin: 0 0 16px; line-height: 1.5; }
+.curator-controls { display: flex; gap: 10px; margin-bottom: 18px; }
+.curator-search {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 13px;
+}
+.curator-controls select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 13px;
+}
+.curator-list { display: flex; flex-direction: column; gap: 8px; }
+.curator-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.curator-row.status-needs-review { border-color: var(--accent); background: var(--accent-soft); }
+.curator-glyph {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 28px;
+  width: 44px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.curator-glyph.big { font-size: 48px; width: auto; }
+.curator-info { flex: 1; min-width: 0; }
+.curator-meaning { font-size: 14px; font-weight: 600; }
+.curator-meta { font-size: 11px; color: var(--muted); margin: 2px 0 6px; }
+.curator-comps { display: flex; flex-wrap: wrap; gap: 6px; }
+.curator-chip {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 14px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.curator-chip.removable { cursor: pointer; color: var(--ink); }
+.curator-chip.removable:hover { border-color: var(--accent); color: var(--accent); }
+.curator-empty { font-size: 12px; color: var(--muted); font-style: italic; }
+.curator-empty-state { padding: 40px; text-align: center; color: var(--muted); }
+.curator-edit-btn {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 13px;
+}
+.curator-edit-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.curator-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+.curator-modal {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 20px;
+  width: 100%;
+  max-width: 640px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+}
+.curator-modal-head { display: flex; align-items: center; gap: 14px; }
+.curator-modal-head > div:nth-child(2) { flex: 1; }
+.curator-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+}
+.curator-selection-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.curator-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 6px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 4px;
+}
+.curator-picker-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  cursor: pointer;
+  color: var(--ink);
+}
+.curator-picker-item .g { font-family: 'Noto Serif JP', serif; font-size: 20px; }
+.curator-picker-item .m { font-size: 9px; color: var(--muted); text-align: center; line-height: 1.2; }
+.curator-picker-item.selected { border-color: var(--accent); background: var(--accent-soft); }
+.curator-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.curator-modal-actions button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 13px;
+}
+.curator-modal-actions button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
 @media (max-width: 640px) {
   .panel { width: 100%; }
   .brand .word { display: none; }

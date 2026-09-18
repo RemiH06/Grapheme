@@ -38,6 +38,20 @@ ROOT = Path(__file__).resolve().parent.parent
 EXCEL_PATH = ROOT / "docs" / "Pictograms.xlsx"
 SOURCES_DIR = ROOT / "data" / "sources"
 OUT_PATH = ROOT / "backend" / "app" / "data" / "graph_data.json"
+MANUAL_COMPONENTS_PATH = ROOT / "data" / "radical_components_manual.json"
+
+
+def load_manual_radical_components():
+    """glifo de radical -> [glifos de sus componentes reales], curado a
+    mano desde /?curate=radicals (ver RadicalCurator.jsx y seccion 11 de
+    docs/METODOLOGIA.md). Reemplaza la descomposicion automatica para
+    ese radical por completo (no se combinan): el punto es que el
+    usuario revise y decida la lista definitiva, no que se acumulen
+    ambas fuentes."""
+    if not MANUAL_COMPONENTS_PATH.exists():
+        return {}
+    with open(MANUAL_COMPONENTS_PATH, encoding='utf-8') as f:
+        return json.load(f)
 
 CATS = ['Primitive', 'Components', 'Human', 'Body', 'Matter', 'Places',
         'Nature', 'Food', 'Animals', 'Objects', 'Life']
@@ -824,11 +838,29 @@ def build():
                 'pos': pos, 'role': role,
             })
 
+    def add_manual_edges_for(owner_id, comp_glyphs):
+        for comp_glyph in comp_glyphs:
+            edges_final.append({
+                'from': resolve_component_id(comp_glyph), 'to': owner_id,
+                'pos': 'component', 'role': 'sem',
+            })
+
     for glyph in compound_order:
         add_edges_for(glyph, compound_id_by_glyph[glyph])
 
+    manual_components = load_manual_radical_components()
     for glyph, radical_id in radical_id_by_glyph.items():
-        if not is_pictographic(glyph, mmh_by_glyph):
+        if glyph in manual_components:
+            # Curado a mano: reemplaza la regla automatica (incluido
+            # is_pictographic) para ESTE radical. Ver seccion 11 de
+            # docs/METODOLOGIA.md: la fuente etimologica clasifica como
+            # "pictografico" (=atomico) a 111 de los 242 radicales, y
+            # para la mayoria eso es correcto (sus "componentes" son solo
+            # como se dibuja el trazo), pero no hay forma automatica de
+            # distinguir esos de un puñado que si tiene piezas reales
+            # reconocibles -- de ahi la revision a mano.
+            add_manual_edges_for(radical_id, manual_components[glyph])
+        elif not is_pictographic(glyph, mmh_by_glyph):
             add_edges_for(glyph, radical_id)
 
     # Un puñado de radicales canonicos (韭, 鹵, 黽, 鼎, 鼠, 龠...) son

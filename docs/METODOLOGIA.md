@@ -575,3 +575,47 @@ bajó de 12 a **6**.
 Conteo final del catálogo después de las tres secciones (9, 10.1,
 10.2, 10.3): 242 radicales, 3668 caracteres, 326 extras, ~8444
 aristas.
+
+## 11. Curación manual de componentes de radicales
+
+`is_pictographic()` (sección 4) marca 111 de los 242 radicales como
+"pictográficos" y por eso los trata como átomos. Investigando por qué
+竜, 魚 y 岡 se veían como su propia pieza mínima, se confirmó que la
+regla SÍ es correcta para la enorme mayoría: de 88 radicales
+pictográficos con "componentes" disponibles si se ignorara la regla,
+**80 resultaron ser puramente descripciones visuales** (ej. 木 = "十"+
+"八", nadie diría que "árbol" está hecho de "diez" y "ocho"; hasta 魚 =
+"⺈"+"田"+"灬" es la misma clase de descripción, "así se ve la forma
+dibujada", no una composición real), verificado comparando cada
+componente contra el propio texto del `hint` etimológico. Ninguna
+heurística automática (ni "el hint menciona el glifo", ni "cuántos
+componentes tendría") separa limpiamente los pocos casos reales de los
+muchos falsos: hasta 鬲 y 豆, cuyos hints SÍ nombran sus piezas
+("a cauldron 口 with three legs 冂丷"), son igual de "solo descripción
+visual" que 木. La única forma honesta de completar esto es revisando
+radical por radical a mano.
+
+**Herramienta**: `frontend/src/components/RadicalCurator.jsx`, montada
+aparte de la app normal en `http://localhost:5190/?curate=radicals`
+(nunca enlazada desde la UI). Lista los 242 radicales, prioriza los que
+no tienen ningún componente (137 al momento de escribir esto, muy por
+encima de los "2-3 de un trazo" que deberían quedar así), y deja elegir
+de qué otros radicales del catálogo está compuesto cada uno mediante un
+buscador. Guarda en `data/radical_components_manual.json` vía dos
+endpoints nuevos en el backend (`GET/POST/DELETE /admin/radicals` y
+`/admin/radical-components/{glyph}`, sección "Curación manual" de
+`backend/app/main.py`): son endpoints de administración locales, no
+pensados para el usuario final de la app.
+
+`data/build_dataset.py` (`load_manual_radical_components()`) lee ese
+archivo en cada corrida: si un radical tiene una entrada manual,
+**reemplaza por completo** su descomposición automática (incluyendo el
+chequeo `is_pictographic`) por la lista curada, con `role='sem'` fijo
+(el objetivo es completar estructura real, no distinguir fonético de
+semántico para estos casos). Una lista vacía `[]` es una confirmación
+explícita de "sí lo revisé, es atómico de verdad" (distinto de `null`,
+que significa "no revisado todavía"), para poder darle seguimiento al
+avance de la revisión en la propia herramienta.
+
+Primer caso confirmado y guardado como ejemplo: 岡 → 山 + 冂 (coincide
+con el propio hint de la fuente, "clouds forming over a mountain").

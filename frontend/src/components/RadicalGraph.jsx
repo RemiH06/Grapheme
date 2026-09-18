@@ -92,12 +92,22 @@ function computeVisible(nodesById, adjacency, lang, showAllRadicals, levelFilter
       if (lang !== 'all' && !n.langs.includes(lang)) continue
       if (levelFilter === 'core' && !isCore(n)) continue
       keep.add(n.id)
-    } else if (n.kind === 'radical' && n.isCharacter && levelFilter === 'core' && isCore(n)) {
+    } else if (n.kind === 'radical' && n.isCharacter && (levelFilter !== 'core' || isCore(n))) {
       // Radical que TAMBIEN es su propio caracter jouyou/HSK (ej. 赤 N4,
-      // 長 N5, 風 N4): se muestra por si mismo en modo "core" aunque
-      // ninguno de sus compuestos dependientes sea core (antes solo se
-      // mostraba si algun compuesto vecino lo arrastraba, escondiendo
-      // caracteres basicos reales -- 19 radicales tenian este problema).
+      // 長 N5, 風 N4): se muestra por si mismo aunque ninguno de sus
+      // compuestos dependientes pase el filtro de nivel actual (antes
+      // solo se mostraba si algun compuesto vecino lo arrastraba,
+      // escondiendo caracteres basicos reales -- 19 radicales tenian
+      // este problema en modo "core"). El chequeo de nivel solo aplica
+      // en modo "core" (ese modo exige que el radical tambien sea
+      // core); en modo "completo" cualquier radical-caracter se muestra
+      // sin condicion de nivel -- si no, activar "ver catalogo completo"
+      // podia hacer DESAPARECER un radical que solo se mostraba por este
+      // camino en modo core y no tiene ningun compuesto real dependiente
+      // (ej. 鼠, sin ningun caracter jouyou/HSK que lo use, solo un
+      // ejemplo ilustrativo fuera de catalogo): "completo" debe ser
+      // siempre un superconjunto de "core", nunca esconder algo que
+      // core si mostraba.
       const hasJa = !!n.jlpt
       const hasZh = n.hsk != null
       if (lang === 'all' || (lang === 'ja' && hasJa) || (lang === 'zh' && hasZh)) keep.add(n.id)

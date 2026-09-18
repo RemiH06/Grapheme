@@ -71,3 +71,21 @@ export function reviewCard(id, grade, glyph) {
     body: JSON.stringify({ grade, glyph }),
   })
 }
+
+// ---- curacion manual de componentes de radicales (herramienta local) ----
+
+export function fetchAdminRadicals() {
+  return req('/admin/radicals')
+}
+
+export function saveRadicalComponents(glyph, components) {
+  return req(`/admin/radical-components/${encodeURIComponent(glyph)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ components }),
+  })
+}
+
+export function clearRadicalComponents(glyph) {
+  return req(`/admin/radical-components/${encodeURIComponent(glyph)}`, { method: 'DELETE' })
+}

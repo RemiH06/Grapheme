@@ -24,6 +24,7 @@ from . import db
 
 DATA_PATH = Path(__file__).resolve().parent / "data" / "graph_data.json"
 STROKES_PATH = Path(__file__).resolve().parent / "data" / "strokes.json"
+MANUAL_COMPONENTS_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "radical_components_manual.json"
 
 app = FastAPI(
     title="Grapheme API",
@@ -165,3 +166,80 @@ def study_review(node_id: str, body: ReviewIn):
     if body.grade not in (0, 1, 2, 3):
         raise HTTPException(status_code=422, detail="grade debe ser 0, 1, 2 o 3")
     return db.record_review(node_id, body.glyph, body.grade)
+
+
+# ---------------------------------------------------------------------------
+# Curacion manual de componentes de radicales (herramienta local, no para
+# el usuario final: ver frontend/src/components/RadicalCurator.jsx, montada
+# en /?curate=radicals). Guarda en data/radical_components_manual.json, que
+# data/build_dataset.py lee en la siguiente corrida para reemplazar la
+# descomposicion automatica de ese radical (ver seccion 11 de
+# docs/METODOLOGIA.md: la fuente etimologica marca 111 de los 242 radicales
+# como "pictograficos" y por eso atomicos, correcto para la mayoria pero no
+# para todos, y no hay forma automatica de distinguir los dos casos).
+# ---------------------------------------------------------------------------
+def _nodes_by_id():
+    by_id = {}
+    for coll in ("radicals", "characters", "extras"):
+        for n in _graph_cache.get(coll, []):
+            by_id[n["id"]] = n
+    return by_id
+
+
+def _load_manual_components():
+    if not MANUAL_COMPONENTS_PATH.exists():
+        return {}
+    with open(MANUAL_COMPONENTS_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _save_manual_components(data):
+    MANUAL_COMPONENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(MANUAL_COMPONENTS_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
+
+
+@app.get("/admin/radicals")
+def admin_radicals():
+    """Los 242 radicales con sus componentes actuales (automaticos o ya
+    curados a mano) y la entrada manual guardada, si existe (None = no
+    revisado todavia; lista vacia = revisado y confirmado atomico)."""
+    by_id = _nodes_by_id()
+    manual = _load_manual_components()
+    out = []
+    for r in _graph_cache.get("radicals", []):
+        comp_edges = [e for e in _graph_cache["edges"] if e["to"] == r["id"]]
+        components = [
+            {"id": other["id"], "glyph": other["glyph"], "role": e["role"]}
+            for e in comp_edges
+            if (other := by_id.get(e["from"]))
+        ]
+        out.append({
+            "id": r["id"],
+            "glyph": r["glyph"],
+            "meaning": r["meaning"],
+            "strokeCount": r["strokeCount"],
+            "components": components,
+            "manual": manual.get(r["glyph"]),
+        })
+    return out
+
+
+class RadicalComponentsIn(BaseModel):
+    components: list[str]
+
+
+@app.post("/admin/radical-components/{glyph}")
+def admin_set_radical_components(glyph: str, body: RadicalComponentsIn):
+    manual = _load_manual_components()
+    manual[glyph] = body.components
+    _save_manual_components(manual)
+    return {"glyph": glyph, "components": body.components}
+
+
+@app.delete("/admin/radical-components/{glyph}")
+def admin_clear_radical_components(glyph: str):
+    manual = _load_manual_components()
+    manual.pop(glyph, None)
+    _save_manual_components(manual)
+    return {"ok": True}
