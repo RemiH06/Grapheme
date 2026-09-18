@@ -106,10 +106,18 @@ function computeVisible(nodesById, adjacency, lang, showAllRadicals, levelFilter
   for (const id of Array.from(keep)) {
     for (const nb of adjacency.get(id)) {
       const nbNode = nodesById.get(nb.id)
-      // en modo "core" no arrastramos otro caracter completo solo porque
-      // sea componente de uno core (ej. 体 usa 本 como fonetico); los
-      // radicales y componentes fonéticos "extra" si se muestran siempre.
-      if (levelFilter === 'core' && nbNode.kind === 'compound' && !isCore(nbNode)) continue
+      // los radicales y componentes foneticos "extra" si se muestran
+      // siempre como vecinos; un caracter compuesto completo solo se
+      // arrastra si de verdad aplica al filtro actual: en modo "core"
+      // no arrastramos otro caracter solo porque sea componente de uno
+      // core (ej. 体 usa 本 como fonetico), y con un idioma especifico
+      // no arrastramos un compuesto que ni siquiera existe en ese idioma
+      // (ej. 糟, solo HSK, colandose al filtrar japones solo porque
+      // comparte un radical con algo que si quedo visible).
+      if (nbNode.kind === 'compound') {
+        if (levelFilter === 'core' && !isCore(nbNode)) continue
+        if (lang !== 'all' && !nbNode.langs.includes(lang)) continue
+      }
       keep.add(nb.id)
     }
   }
@@ -197,7 +205,7 @@ const RadicalGraph = forwardRef(function RadicalGraph(
       ctx.beginPath()
       ctx.arc(n.x, n.y, r, 0, Math.PI * 2)
       if (n.kind === 'extra') {
-        ctx.strokeStyle = cssVar('--muted')
+        ctx.strokeStyle = n.category ? cssVar(CATEGORY_INFO[categoryKeyOf(n)].varName) : cssVar('--muted')
         ctx.lineWidth = 1.2 / view.k
         ctx.globalAlpha = dim ? 0.12 : 0.75
         ctx.stroke()

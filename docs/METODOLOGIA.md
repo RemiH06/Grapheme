@@ -82,7 +82,10 @@ en este orden, y usa la primera que tenga datos para el glifo:
    términos de caligrafía japonesa: kamae/tare/nyo/etc., mapeados a las
    mismas etiquetas que IDS en `KANJIVG_POSITION_MAP`) y a veces un
    hint fonético (`kvg:phon`) que se usa igual que el `phonetic` de
-   makemeahanzi para decidir el rol de la arista.
+   makemeahanzi para decidir el rol de la arista. `load_kanjivg()`
+   baja recursivamente por los envoltorios de agrupación visual sin su
+   propio `kvg:element` (ver sección 10.3): sin eso, algunos caracteres
+   perdían componentes reales enteros.
 
 ## 4. Cómo se decide si un radical "ya no se descompone más"
 
@@ -184,8 +187,9 @@ corpus: no un número inventado, y japonés/chino no son comparables
     un compuesto real fuera de catálogo.
   - 齊 dejó de estar aislado: se fusionó con su forma simplificada 齐
     (sección 2), que sí es HSK 3 y aparece en 济/剂/挤.
-- **~70 caracteres (1.9%) sin dominio semántico resoluble**: ver
-  sección 9 para el porqué y el mecanismo completo de clasificación.
+- **6 caracteres (0.16%) y 25 componentes "extra" sin dominio semántico
+  resoluble**: ver secciones 9 y 10 para el porqué y el mecanismo
+  completo de clasificación.
 - **Tier / nombres de nivel del Excel**: parseados parcialmente,
   no conectados a la UI (ver sección 1).
 - **La marca "remove" (鬥)** del Excel original nunca se resolvió:
@@ -367,16 +371,21 @@ tradicional (o viceversa): `马→馬, 车→車, 见→見, 贝→貝, 龙→�
 quedado sin dominio aunque su radical real sí esté clasificado, solo
 que bajo el otro codepoint.
 
-El residuo final de **20 caracteres (0.5%)** sin dominio resoluble son
-casos donde ni el campo `radical` de makemeahanzi resuelve a uno de los
-242 canónicos ni hay ningún componente real con rol semántico
-registrado en ninguna fuente (ej. 刁, 勲, 区, 匿, 呉): se dejan sin
-`category` (`null`) en vez de forzar una categoría arbitraria; la UI
-(`DetailPanel.jsx`, `StudyMode.jsx`) simplemente no muestra el badge de
-dominio cuando `category` es `null`, sin caerse ni mostrar un valor
-inventado. La mayoría son formas kyūjitai japonesas (勲営壱巻帯暦気発舎
-舗霊黙) que ni siquiera tienen entrada en makemeahanzi (fuente china), o
-radicales genuinamente ausentes de los 242 (匸, 己, 民, 旡, 巳).
+El residuo bajó primero a 12 caracteres con lo de esta sección, y
+después a **6 (0.16%)** con la sección 10 (resolución recursiva +
+arreglo de KanjiVG): son casos donde ni el campo `radical` de
+makemeahanzi resuelve a uno de los 242 canónicos, ni la recursión
+encuentra un ancla real, ni hay ningún componente real con rol
+semántico registrado en ninguna fuente (刁, 匹, 匿, 己, 巻, 网): se
+dejan sin `category` (`null`) en vez de forzar una categoría
+arbitraria; la UI (`DetailPanel.jsx`, `StudyMode.jsx`) simplemente no
+muestra el badge de dominio cuando `category` es `null`, sin caerse ni
+mostrar un valor inventado. Los 6 que quedan son puros radicales
+ausentes de los 242 (匸 para 匹/匿, 己 para 巻, 网) o casos sin ningún
+componente real en ninguna fuente (刁): cerrarlos a cero significaría
+agregar radicales nuevos a `DOMAIN_MAP` a mano, una decisión de
+clasificación (ver el pendiente de la tabla de justificación en
+`steps.md`), no un bug que arreglar con más código.
 
 Este residuo bajó de ~70 (1.9%) a 20 en una segunda pasada: revisando
 uno por uno por qué fallaban, la mayoría (50 de 70) resultó ser el
@@ -388,7 +397,9 @@ shinjitai japonesa), así que se resolvió extendiendo `MERGE_INTO` con
 identidad léxica aunque las formas no se parezcan nada visualmente (por
 eso el trazo de 飞 sigue viniendo de makemeahanzi y no de KanjiVG, ver
 sección 8; para dominio semántico lo que importa es que es el mismo
-carácter, no el trazo).
+carácter, no el trazo). Una tercera pasada, al agregar la resolución
+recursiva de ancla (sección 10), encontró dos pares más del mismo tipo
+(`黑→黒, 卤→鹵`) y bajó el residuo de 20 a 12.
 
 **Bug real encontrado al hacer esta extensión** (no exclusivo de los 10
 pares nuevos: ya afectaba a los 6 pares anteriores de la sección 2,
@@ -433,3 +444,134 @@ como el filtro de "puente necesario" usan esa clave de forma uniforme,
 sin ningún caso especial. Apagar "Sin categoría" ahora los oculta igual
 que cualquier otro dominio (salvo que sean puente real), y apagar los
 10 dominios a la vez vacía el lienzo por completo.
+
+(La sección 10 le dio dominio real a la mayoría de los extras después
+de esto, así que el bucket "Sin categoría" hoy es mucho más chico que
+los ~389 originales: 25 extras + 6 caracteres = 31 nodos. El mecanismo
+del toggle no cambió, solo cuántos nodos caen en él por default.)
+
+## 10. Los nodos "extra" tampoco son átomos: descomposición recursiva
+
+Los ~317 nodos "extra" (componentes fuera de los 242 radicales Y fuera
+del catálogo jōyō+HSK, ej. 冎, 垔) se creaban en `resolve_component_id()`
+y ahí se quedaban: `add_edges_for()` nunca corría sobre ellos, así que
+nunca ganaban aristas propias ni dominio, sin importar que
+`components_of()` sí tuviera datos reales para casi todos. Un
+diagnóstico antes de tocar código confirmó la magnitud: **296 de 317
+(93%) sí tenían descomposición real disponible**, y **273 de esos 296
+(92%) habrían resuelto a un dominio real** con la misma lógica de un
+solo salto que ya existía. Solo 21 eran hojas genuinas sin ningún dato.
+
+### 10.1 Descomponer los extras: cola, no una sola pasada
+
+Al final de `build()`, después de que radicales/caracteres/ejemplos
+ilustrativos ya agregaron todo lo que iban a agregar a `extra_nodes`,
+una cola procesa cada extra con `add_edges_for()` igual que a un
+radical o carácter: `components_of(glyph, ...)` le da sus piezas
+reales, y cada pieza se resuelve a un nodo (radical, carácter, o un
+extra nuevo si nadie lo había visto todavía). Es una cola y no una
+sola pasada porque descomponer un extra puede revelar un "nieto" que
+todavía no existe como nodo, que a su vez hay que descomponer. En la
+práctica esto satura rápido: 317 extras iniciales pasaron a 325 (solo
+8 nietos nuevos), confirmando que el espacio real de componentes CJK
+es finito y la mayoría de las cadenas cierran en 1-2 niveles.
+
+Se aplica el mismo criterio que a los radicales (`is_pictographic()`,
+sección 4): si el extra es un pictograma puro, su "descomposición" es
+solo el trazo, no componentes reales, y se salta. Sin este cuidado
+varios extras habrían ganado aristas falsas hacia trazos sueltos.
+
+Resultado: casi todos los 317 puntos huecos del grafo ahora tienen
+conexiones reales en vez de aparecer como átomos sueltos (el conteo
+final de aristas está al final de la sección 10.3, después del arreglo
+de KanjiVG).
+
+### 10.2 Resolución de ancla recursiva y su efecto en el residuo de caracteres
+
+`resolve_anchor_radical()` (sección 9.2) solo intentaba un salto: el
+campo `radical` del carácter, y si no resolvía, su primer componente
+semántico directo. Eso dejaba fuera casos reales donde el radical de
+indexación está a 2 saltos (ej. 舎 → 吉, que no es canónico → los
+componentes de 吉 son 士+口, y 士 sí es canónico). Se extendió para
+recursar hasta `MAX_ANCHOR_DEPTH = 4` saltos, con dos guardas: un
+`_seen` que corta cualquier ciclo (no debería haberlos en una
+descomposición real, pero es una red de seguridad barata), y el mismo
+chequeo `is_pictographic()` que ya se usa en todos lados, aplicado
+esta vez al glifo raíz completo, no solo a los saltos intermedios.
+
+**Ese último chequeo corrigió un bug que ya existía, no solo habilitó
+la recursión**: antes, `resolve_anchor_radical()` nunca revisaba si el
+carácter mismo era pictográfico antes de caer a `components_of()`. Para
+un puñado de caracteres (己, 网, 匹, 卤, 默...) eso significaba usar su
+descomposición de TRAZO (no componentes reales) como si fuera una
+descomposición semántica real, y por pura coincidencia esos trazos a
+veces "resolvían" a un radical canónico que no tenía nada que ver.
+Confirmado con 己: `is_pictographic('己')` es `True`, así que su
+"componente" (乚) es solo cómo se dibuja el trazo, no una pieza real.
+Con el chequeo agregado, esos casos correctamente devuelven `None` en
+vez de una categoría inventada por casualidad, así que el residuo
+subió transitoriamente en 5 (己, 网, 匹, 卤, 默) al mismo tiempo que la
+recursión resolvía otros 10 automáticamente. Revisando esos 5 uno por
+uno, dos resultaron ser el mismo caso de siempre (卤→鹵, 默 vía su
+propio radical 黑→黒, sección 9.2), y los otros tres (己, 网, 匹→匸) son
+radicales genuinamente ausentes de los 242, no un bug.
+
+Efecto neto: el residuo de caracteres bajó de 20 a **12** (0.3%).
+
+### 10.3 KanjiVG perdía componentes enteros por no bajar en envoltorios de agrupación
+
+Encontrado por el usuario comparando 黙 ("silencio") contra sus piezas
+reales: el panel solo mostraba 黒 ("black", vía línea punteada,
+fonético), nunca 犬 ("dog"), aunque a simple vista el kanji es
+claramente 黒+犬 (la etimología real: "un perro que no ladra" ~
+silencio). El bug estaba en `load_kanjivg()`: solo miraba los hijos
+DIRECTOS del grupo `<g>` raíz del carácter, y si un hijo no tenía su
+propio `kvg:element` lo saltaba por completo sin bajar a ver qué había
+adentro.
+
+El XML real de 黙 (verificado en `data/sources/kanjivg.xml`) tiene esta
+forma:
+
+```
+<g kvg:element="黙">
+  <g kvg:position="top">                          <!-- SIN kvg:element -->
+    <g kvg:element="黒" kvg:part="1" kvg:position="left" kvg:phon="黒1">...</g>
+    <g kvg:element="犬" kvg:position="right">...</g>
+  </g>
+  <g kvg:element="黒" kvg:part="2" kvg:position="bottom" kvg:phon="黒2">...</g>
+</g>
+```
+
+KanjiVG parte el trazo de 黒 en dos bloques visuales no contiguos (el
+"里" arriba, el "灬" abajo) y agrupa el de arriba junto con 犬 bajo un
+envoltorio puramente posicional (`kvg:position="top"`) sin su propio
+elemento. El parser viejo veía ese envoltorio, no encontraba
+`kvg:element`, y se lo saltaba entero -- perdiendo tanto la mitad de
+黒 como el único 犬 real. Solo quedaba el segundo bloque de 黒 (el
+directo hijo de la raíz), de ahí que SIEMPRE apareciera como fonético
+y NUNCA apareciera 犬.
+
+Un escaneo del `kanjivg.xml` completo encontró **819 caracteres** con
+al menos un envoltorio así (de ~6700 totales), pero como KanjiVG es
+solo el tercer respaldo (sección 3), el impacto real en nuestro catálogo
+es menor: **63 caracteres** de los que sí usan KanjiVG como fuente
+perdían al menos un componente real (ej. 労, 徳, 栄, 観, 騒, 壱, 営,
+帯, 発, 舗, 黙...).
+
+`_kvg_named_parts()` baja recursivamente por estos envoltorios,
+heredando la posición del envoltorio solo si el hijo real no trae la
+suya propia (en 黙, 犬 sí trae `position="right"` propia, así que esa
+es la que se usa). Deduplicado por componente: un mismo radical puede
+aparecer partido en 2+ bloques visuales del SVG (como el 黒 de 黙), pero
+para el grafo es un solo componente real, no dos aristas iguales hacia
+el mismo carácter.
+
+Efecto neto: **6 de los 63 caracteres afectados** eran parte del
+residuo sin dominio (営, 壱, 帯, 発, 舗, 黙: todas formas kyūjitai
+japonesas que dependían 100% de KanjiVG), y se resolvieron solos al
+recuperar su componente semántico real. El residuo final de caracteres
+bajó de 12 a **6**.
+
+Conteo final del catálogo después de las tres secciones (9, 10.1,
+10.2, 10.3): 242 radicales, 3668 caracteres, 326 extras, ~8444
+aristas.

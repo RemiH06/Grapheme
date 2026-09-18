@@ -64,8 +64,8 @@ canvas + d3-force en React.
 
 ## Features
 
-- Grafo interactivo (canvas + d3-force) de 242 radicales, 3670
-  caracteres y ~7725 aristas dirigidas.
+- Grafo interactivo (canvas + d3-force) de 242 radicales, 3668
+  caracteres y ~8444 aristas dirigidas.
 - Distingue conexiones semánticas de fonéticas (línea sólida vs.
   punteada) con flecha componente → contenedor al seleccionar un nodo.
 - Filtro por idioma (japonés / chino / ambos) y por nivel (JLPT N5-N3
@@ -101,12 +101,9 @@ canvas + d3-force en React.
 - Recuperar el sistema de nivel/mnemónico del Excel original (ver
   `steps.md`): existía una progresión de aprendizaje pensada a mano
   que se perdió al conectar el catálogo externo.
-- Revisar uno por uno los 20 caracteres (0.5%) que quedaron sin dominio
-  semántico resoluble, para cerrar ese residuo a cero (ver
-  `docs/METODOLOGIA.md` sección 9 y `steps.md`).
-- Alineación de trazos tolerante a errores en el quiz de trazado (ver
-  `steps.md`), para que partir un trazo por accidente no desalinee la
-  calificación del resto.
+- Revisar uno por uno los 6 caracteres y 25 componentes "extra" que
+  quedaron sin dominio semántico resoluble, para cerrar ese residuo a
+  cero (ver `docs/METODOLOGIA.md` secciones 9-10 y `steps.md`).
 
 ## Autoría
 

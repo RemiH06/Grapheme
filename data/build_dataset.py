@@ -285,6 +285,11 @@ MERGE_INTO = {
     # semantico lo que importa es que es el mismo caracter).
     '门': '門', '页': '頁', '风': '風', '鱼': '魚', '鸟': '鳥',
     '氺': '水', '㔾': '卩', '齿': '歯', '龟': '亀', '飞': '飛',
+    # Tercera tanda, encontrados al agregar resolucion recursiva de
+    # ancla (resolve_anchor_radical con MAX_ANCHOR_DEPTH): mismo caso de
+    # siempre, radical de indexacion en su forma tradicional/simplificada
+    # que no esta en el catalogo de 242 en vez de la shinjitai que si.
+    '黑': '黒', '卤': '鹵',
 }
 
 # El radical de "oreja" (阝) es ambiguo sin ver la posicion: a la
@@ -398,10 +403,43 @@ KANJIVG_POSITION_MAP = {
 }
 
 
+def _kvg_named_parts(g, glyph, inherited_pos):
+    """Componentes reales dentro de un grupo <g>, bajando por los
+    envoltorios sin kvg:element propio (grupos que KanjiVG usa solo para
+    agrupar visualmente 2+ piezas reales bajo una misma posicion, ej. el
+    "top" de 黙 que envuelve a 黒(parte 1) y 犬 sin tener el mismo
+    elemento). Antes el parser solo miraba hijos directos y se saltaba
+    estos envoltorios enteros (`if not comp: continue`), perdiendo TODO
+    lo que hubiera adentro -- confirmado en 63 caracteres de nuestro
+    catalogo que se quedaban con un solo componente real teniendo dos o
+    mas (ej. 黙 solo mostraba 黒 y nunca 犬, aunque el usuario lo notara
+    a simple vista comparando el kanji con sus piezas)."""
+    out = []
+    for child in g:
+        if child.tag != 'g':
+            continue
+        comp = child.get(KANJIVG_NS + 'element')
+        pos = child.get(KANJIVG_NS + 'position')
+        pos = KANJIVG_POSITION_MAP.get(pos, pos) if pos else None
+        if comp and comp != glyph:
+            phon = child.get(KANJIVG_NS + 'phon')
+            out.append((comp, pos or inherited_pos or 'component', phon))
+        else:
+            # envoltorio sin elemento propio (o repite el glifo raiz,
+            # que pasa en pictogramas simples cuando KanjiVG solo agrupa
+            # el trazo): bajar un nivel, heredando su posicion si tenia
+            # una mas especifica que la de mas arriba.
+            out.extend(_kvg_named_parts(child, glyph, pos or inherited_pos))
+    return out
+
+
 def load_kanjivg():
-    """glyph -> [(componente, posicion, pista_fonetica)] usando SOLO el
-    primer nivel de anidacion (los componentes propios del caracter, no
-    los sub-componentes de esos componentes)."""
+    """glyph -> [(componente, posicion, pista_fonetica)], bajando por
+    envoltorios de agrupacion visual sin su propio kvg:element (ver
+    `_kvg_named_parts`). Deduplicado por componente: un mismo radical
+    puede aparecer partido en 2+ trozos visuales dentro del SVG (ej. 黒
+    en 黙 se dibuja en dos bloques separados), pero para el grafo es un
+    solo componente real, no dos aristas iguales."""
     tree = ET.parse(SOURCES_DIR / 'kanjivg.xml')
     by_glyph = {}
     for kanji_el in tree.getroot():
@@ -412,15 +450,11 @@ def load_kanjivg():
         if not glyph:
             continue
         parts = []
-        for child in root_g:
-            if child.tag != 'g':
+        seen_comps = set()
+        for comp, pos, phon in _kvg_named_parts(root_g, glyph, None):
+            if comp in seen_comps:
                 continue
-            comp = child.get(KANJIVG_NS + 'element')
-            if not comp or comp == glyph:
-                continue
-            pos = child.get(KANJIVG_NS + 'position')
-            pos = KANJIVG_POSITION_MAP.get(pos, pos) if pos else 'component'
-            phon = child.get(KANJIVG_NS + 'phon')
+            seen_comps.add(comp)
             parts.append((comp, pos, phon))
         if parts:
             by_glyph[glyph] = parts
@@ -567,24 +601,56 @@ DOMAIN_MAP = {
 }
 
 
-def resolve_anchor_radical(glyph, mmh_by_glyph, mega_by_glyph, kanjivg_by_glyph, canonical_glyphs):
+MAX_ANCHOR_DEPTH = 4
+
+
+def resolve_anchor_radical(glyph, mmh_by_glyph, mega_by_glyph, kanjivg_by_glyph, canonical_glyphs, _depth=0, _seen=None):
     """El radical de indexacion real de un caracter (el mismo que usan
     los diccionarios de papel), resuelto a uno de los 242 canonicos, para
     asignarle un dominio semantico. Prioriza el campo "radical" que trae
     makemeahanzi; si no esta o no resuelve a uno canonico (variante que
     MERGE_INTO no cubre, o un radical fuera de nuestros 242), cae al
-    primer componente SEMANTICO real de components_of()."""
+    primer componente SEMANTICO real de components_of().
+
+    Si NINGUNO de los componentes directos es canonico, intenta un salto
+    mas: resolver el anclaje de cada componente semantico a su vez (ej.
+    勲 -> 動, no canonico -> componentes de 動 -> 力, canonico). Antes esto
+    se quedaba en None con solo un salto; la mayoria de los residuos sin
+    categoria eran justo casos donde el radical de indexacion real esta
+    a 2 saltos, no 1. `_seen` evita ciclos (no deberian existir en una
+    descomposicion real, pero es una red de seguridad barata) y
+    MAX_ANCHOR_DEPTH pone un tope duro por si acaso.
+
+    Si el propio glyph es un pictograma puro (is_pictographic), su
+    "descomposicion" es solo el trazo, no componentes reales -- igual
+    que para los 243 radicales, no hay que confiar en ella (ver seccion
+    4 de METODOLOGIA.md); simplemente no hay mas de donde sacar un ancla."""
     mmh = mmh_by_glyph.get(glyph)
     if mmh and mmh.get('radical'):
         cand = MERGE_INTO.get(mmh['radical'], mmh['radical'])
         if cand in canonical_glyphs:
             return cand
-    for comp_glyph, pos, role in components_of(glyph, mmh_by_glyph, mega_by_glyph, kanjivg_by_glyph):
-        if role != 'sem':
-            continue
-        cand = MERGE_INTO.get(comp_glyph, comp_glyph)
+    if is_pictographic(glyph, mmh_by_glyph):
+        return None
+    if _seen is None:
+        _seen = set()
+    if glyph in _seen or _depth >= MAX_ANCHOR_DEPTH:
+        return None
+    _seen.add(glyph)
+    sem_comps = [
+        MERGE_INTO.get(comp_glyph, comp_glyph)
+        for comp_glyph, pos, role in components_of(glyph, mmh_by_glyph, mega_by_glyph, kanjivg_by_glyph)
+        if role == 'sem'
+    ]
+    for cand in sem_comps:
         if cand in canonical_glyphs:
             return cand
+    for cand in sem_comps:
+        deeper = resolve_anchor_radical(
+            cand, mmh_by_glyph, mega_by_glyph, kanjivg_by_glyph, canonical_glyphs, _depth + 1, _seen,
+        )
+        if deeper:
+            return deeper
     return None
 
 
@@ -791,6 +857,35 @@ def build():
                 'isExample': True,
             })
         edges_final.append({'from': radical_id, 'to': example_id, 'pos': 'example', 'role': 'sem'})
+
+    # ---- 4) los nodos "extra" tampoco son atomos ----
+    # Cayeron fuera del catalogo de 242 radicales Y del catalogo
+    # jouyou+HSK, pero eso no los vuelve pictogramas puros: la mayoria SI
+    # tiene descomposicion real en las mismas fuentes que ya usamos para
+    # radicales y caracteres (ver docs/METODOLOGIA.md seccion 10). Se
+    # procesa en cola porque descomponer un extra puede revelar un
+    # componente que todavia no existe como nodo (un extra "nieto"), que
+    # a su vez hay que descomponer -- en la practica satura rapido (el
+    # espacio real de componentes CJK es finito), pero se procesa como
+    # cola en vez de una sola pasada por si acaso. `seen_extras` evita
+    # reprocesar el mismo glifo dos veces (y corta cualquier ciclo).
+    seen_extras = set()
+    worklist = list(extra_nodes.keys())
+    while worklist:
+        glyph = worklist.pop()
+        if glyph in seen_extras:
+            continue
+        seen_extras.add(glyph)
+        if is_pictographic(glyph, mmh_by_glyph):
+            continue  # mismo criterio que para radicales: sin componentes reales
+        owner_id = extra_nodes[glyph]['id']
+        before = set(extra_nodes.keys())
+        add_edges_for(glyph, owner_id)
+        worklist.extend(set(extra_nodes.keys()) - before)
+
+    for x in extra_nodes.values():
+        anchor = resolve_anchor_radical(x['glyph'], mmh_by_glyph, mega_by_glyph, kanjivg_by_glyph, canonical_glyphs)
+        x['category'] = DOMAIN_MAP.get(anchor) if anchor else None
 
     return {
         'radicals': radicals_final,

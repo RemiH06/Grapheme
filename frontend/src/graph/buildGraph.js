@@ -56,6 +56,7 @@ export function buildGraph(raw) {
       id: x.id,
       glyph: x.glyph,
       kind: 'extra',
+      category: x.category || null,
       meaning: x.meaning,
       pinyin: x.pinyin,
       isExample: !!x.isExample,
