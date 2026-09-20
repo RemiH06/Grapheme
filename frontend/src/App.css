@@ -635,6 +635,8 @@ kbd {
 .curator-picker-item.other .m { font-style: italic; color: var(--cat-food); }
 .curator-picker-item.kanji { border-color: var(--cat-places); }
 .curator-picker-item.kanji .m { color: var(--cat-places); }
+.curator-picker-item.add-new { border-style: solid; border-width: 2px; border-color: var(--accent); background: var(--accent-ink); }
+.curator-picker-item.add-new .m { color: var(--accent); font-weight: 600; }
 .curator-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .curator-modal-actions button {
   padding: 8px 16px;

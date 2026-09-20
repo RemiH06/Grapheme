@@ -308,6 +308,10 @@ MERGE_INTO = {
     # literalmente de ahi sale la forma de la katakana. No hace falta
     # un nodo nuevo, resuelve directo al radical/kanji que ya existe.
     'ク': '久',
+    # コ (katakana "ko") NO se fusiona como ク/久: a diferencia de aquel,
+    # aqui se quiere a コ como su propio nodo auxiliar seleccionable
+    # (con 己 como su componente via radical_components_manual.json),
+    # no identificado 1:1 con el kanji del que deriva.
     # Trazos del bloque oficial CJK Strokes que duplican, forma por
     # forma, un radical de un solo trazo ya existente (por eso se
     # sacaron de la lista ofrecida en la pestana "Trazos" del curador):
@@ -361,6 +365,14 @@ EXTRA_VARIANTS = {
     '乙': ['乚', '乛', '⺄', '𠃉', '𠃊', '𠃋', '𠃌', '𠃍', '𠃎'],
     '久': ['ク'],
 }
+
+# Glifos que son fila propia del Excel (radicals_raw) y siguen fusionados
+# en MERGE_INTO para el conteo de 242 (misma pieza Kangxi que su target),
+# pero que ademas se quieren como nodo "auxiliar" propio y seleccionable
+# en el curador, con el radical al que se fusionaron como su componente
+# (via radical_components_manual.json). Ver comentario en build() junto
+# a FORCE_STANDALONE_AUXILIAR para el porque no basta con lo anterior.
+FORCE_STANDALONE_AUXILIAR = {'⺌'}
 
 # El radical de "oreja" (阝) es ambiguo sin ver la posicion: a la
 # izquierda es 阜 (colina, ⻖ en el Excel), a la derecha es 邑 (ciudad,
@@ -874,6 +886,13 @@ def build():
     extra_nodes = {}
     stroke_derivations = load_stroke_derivations()
 
+    def _get_or_create_extra(glyph):
+        if glyph in extra_nodes:
+            return extra_nodes[glyph]['id']
+        eid = f"x{len(extra_nodes) + 1:04d}"
+        extra_nodes[glyph] = {'id': eid, 'glyph': glyph}
+        return eid
+
     def resolve_component_id(glyph):
         # Encadenado porque un trazo puede "derivar de" otro trazo (que
         # a su vez derive de un radical): un solo intento no bastaria
@@ -888,11 +907,7 @@ def build():
             return radical_id_by_glyph[glyph]
         if glyph in compound_id_by_glyph:
             return compound_id_by_glyph[glyph]
-        if glyph in extra_nodes:
-            return extra_nodes[glyph]['id']
-        eid = f"x{len(extra_nodes) + 1:04d}"
-        extra_nodes[glyph] = {'id': eid, 'glyph': glyph}
-        return eid
+        return _get_or_create_extra(glyph)
 
     # Direccion: SIEMPRE de la pieza simple hacia lo que la contiene
     # (componente -> compuesto), nunca al reves. Un radical no es
@@ -944,10 +959,24 @@ def build():
     # nodo "extra" igual que cualquier componente fonético fuera de
     # catálogo, y de ahí en adelante se comportan como cualquier otro
     # extra (seccion 10), incluida la resolución de dominio al final.
+    #
+    # Caso distinto: glifos que SI son fila propia del Excel y estan
+    # fusionados en MERGE_INTO con otro radical (misma pieza Kangxi,
+    # incluidos en el conteo de 242 bajo un solo nodo), pero que ademas
+    # se quieren como auxiliar propio y seleccionable, con el radical al
+    # que se fusionaron como su componente (ej. ⺌ "small (variant)",
+    # fusionado con 小 para no duplicar el radical, pero se quiere
+    # tambien un nodo ⺌ independiente con 小 como componente). Si se
+    # dejara pasar por resolve_component_id() de forma normal, la fusion
+    # lo resolveria de inmediato al MISMO id de 小 y add_manual_edges_for
+    # crearia un auto-enlace 小->小 sin sentido; FORCE_STANDALONE_AUXILIAR
+    # fuerza la creacion de un nodo "extra" propio para el glifo literal,
+    # sin pasar por la cadena de fusion.
     for glyph, comps in manual_components.items():
         if glyph in radical_id_by_glyph:
             continue  # ya se proceso arriba como radical canonico
-        add_manual_edges_for(resolve_component_id(glyph), comps)
+        owner_id = _get_or_create_extra(glyph) if glyph in FORCE_STANDALONE_AUXILIAR else resolve_component_id(glyph)
+        add_manual_edges_for(owner_id, comps)
 
     # Un puñado de radicales canonicos (韭, 鹵, 黽, 鼎, 鼠, 龠...) son
     # pictogramas puros legitimos -- igual que 木/水/火 -- pero ademas no

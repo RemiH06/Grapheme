@@ -6,7 +6,6 @@ import {
   fetchAdminRadicals,
   fetchAdminStrokes,
   saveRadicalComponents,
-  saveStrokeDerivation,
 } from '../api/client'
 
 /** Herramienta local de curacion, sin relacion con la app de estudio:
@@ -15,21 +14,22 @@ import {
  * los marca "pictograficos" (=atomicos) pero en realidad si tienen
  * piezas reconocibles (ver docs/METODOLOGIA.md seccion 11). Montada
  * aparte del resto de la app en /?curate=radicals, nunca en la UI
- * normal. Tres pestañas, cada una con su propio significado de "listo":
+ * normal. Dos pestañas, cada una con su propio significado de "listo":
  *
  * - Radicales: los 242 (menos las fusiones), "se compone de" (multiple).
- * - Trazos: los del bloque oficial CJK Strokes que no duplican un
- *   radical de un solo trazo, "deriva de" (un solo radical o ninguno).
- * - Auxiliares: los nodos "extra" reales sin pronunciacion (321 al
- *   momento de escribir esto), mismo editor que los radicales.
+ * - Auxiliares: los nodos "extra" reales sin pronunciacion, mismo
+ *   editor que los radicales.
  *
- * Radicales/Auxiliares guardan en data/radical_components_manual.json;
- * Trazos guarda en data/stroke_derivation_manual.json. Ambos los lee
+ * Los trazos del bloque oficial CJK Strokes ya se terminaron de curar
+ * (cada uno "deriva de" un radical o de otro trazo, sin pestaña propia
+ * ya que no queda nada por revisar ahi); siguen disponibles como
+ * opcion seleccionable en "se compone de" via canonicalStrokes.
+ *
+ * Ambos guardan en data/radical_components_manual.json, que lee
  * build_dataset.py en la siguiente corrida. */
 
 const KIND_TABS = [
   { key: 'radical', label: 'Radicales' },
-  { key: 'stroke', label: 'Trazos' },
   { key: 'auxiliar', label: 'Auxiliares' },
 ]
 
@@ -52,9 +52,8 @@ export default function RadicalCurator() {
   const [radicals, setRadicals] = useState(null) // la lista que se esta REVISANDO (radical o auxiliar segun kind)
   const [canonicalRadicals, setCanonicalRadicals] = useState(null) // los 240, SIEMPRE cargados, para los pickers
   const [canonicalStrokes, setCanonicalStrokes] = useState(null) // los del bloque oficial CJK Strokes, SIEMPRE cargados
-  const [canonicalAuxiliares, setCanonicalAuxiliares] = useState(null) // los 321, SIEMPRE cargados (solo se listan en el picker si hay busqueda)
+  const [canonicalAuxiliares, setCanonicalAuxiliares] = useState(null) // SIEMPRE cargados (solo se listan en el picker si hay busqueda)
   const [canonicalKanji, setCanonicalKanji] = useState(null) // los 3668, SIEMPRE cargados (idem)
-  const [strokes, setStrokes] = useState(null) // la lista que se esta REVISANDO en la pestaña "Trazos"
   const [error, setError] = useState(null)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('needs-review')
@@ -63,8 +62,6 @@ export default function RadicalCurator() {
   const [pickerQuery, setPickerQuery] = useState('')
   const [saving, setSaving] = useState(false)
   const [approvingGlyph, setApprovingGlyph] = useState(null)
-  const [strokeEditGlyph, setStrokeEditGlyph] = useState(null)
-  const [strokePickerQuery, setStrokePickerQuery] = useState('')
 
   // Radicales, trazos, auxiliares Y kanji/hanzi se usan como opciones de
   // CUALQUIER buscador de componentes: la descomposicion real de un
@@ -85,29 +82,26 @@ export default function RadicalCurator() {
       .then((data) => setRadicals(data))
       .catch((e) => setError(e))
   }
-  function loadStrokes() {
-    return fetchAdminStrokes()
-      .then((data) => setStrokes(data))
-      .catch((e) => setError(e))
-  }
   useEffect(() => {
     setError(null)
     setRadicals(null)
-    setStrokes(null)
-    setStatusFilter(kind === 'stroke' ? 'all' : 'needs-review')
-    if (kind === 'stroke') loadStrokes()
-    else loadList()
+    setStatusFilter('needs-review')
+    loadList()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind])
 
-  // Boton rapido para el caso comun: confirmar que un radical/auxiliar
-  // de verdad es un atomo (sin abrir el editor completo a poner "sin
-  // componentes" a mano cada vez). Guarda lista vacia = "revisado, es
-  // atomico de verdad" (distinto de null = "no revisado").
-  async function approveAsAtomic(r) {
+  // Boton rapido para el caso comun de estar revisando el lote
+  // "automatico": confirmar que los componentes que ya detecto la
+  // fuente etimologica son correctos, sin abrir el editor completo.
+  // Guarda esos mismos componentes como curados a mano (no una lista
+  // vacia: eso mezclaria "ya revise esto y esta bien" con "esto es
+  // atomico de verdad", que son cosas distintas). Solo aplica a items
+  // sin curar todavia (r.manual == null); uno ya curado a mano se edita
+  // con el editor completo, nunca se pisa con este atajo.
+  async function approveAsCurated(r) {
     setApprovingGlyph(r.glyph)
     try {
-      await saveRadicalComponents(r.glyph, [])
+      await saveRadicalComponents(r.glyph, r.components.map((c) => c.glyph))
       await loadList()
     } finally {
       setApprovingGlyph(null)
@@ -133,30 +127,21 @@ export default function RadicalCurator() {
       .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || (a.strokeCount || 0) - (b.strokeCount || 0))
   }, [withStatus, statusFilter, query])
 
-  const strokeCounts = useMemo(() => {
-    if (!strokes) return { derived: 0, undetermined: 0 }
-    return {
-      derived: strokes.filter((s) => s.derivesFrom).length,
-      undetermined: strokes.filter((s) => !s.derivesFrom).length,
-    }
-  }, [strokes])
-
-  const filteredStrokes = useMemo(() => {
-    if (!strokes) return []
-    const q = query.trim().toLowerCase()
-    return strokes
-      .filter((s) => !q || s.glyph.includes(q) || (s.derivesFrom || '').includes(q))
-      .sort((a, b) => (a.derivesFrom ? 1 : 0) - (b.derivesFrom ? 1 : 0))
-  }, [strokes, query])
-
   function openEditor(r) {
     setEditingGlyph(r.glyph)
     setEditSelection(r.manual != null ? r.manual : r.components.map((c) => c.glyph))
     setPickerQuery('')
   }
 
-  function toggleComponent(glyph) {
-    setEditSelection((sel) => (sel.includes(glyph) ? sel.filter((g) => g !== glyph) : [...sel, glyph]))
+  // Se permiten repetidos (ej. 厽 = 厶+厶+厶): agregar SIEMPRE suma una
+  // instancia nueva, nunca quita una existente (para eso esta el "x" de
+  // cada chip, que quita solo esa instancia por indice, no por glifo).
+  function addComponent(glyph) {
+    setEditSelection((sel) => [...sel, glyph])
+  }
+
+  function removeComponentAt(index) {
+    setEditSelection((sel) => sel.filter((_, i) => i !== index))
   }
 
   async function save() {
@@ -181,23 +166,13 @@ export default function RadicalCurator() {
     }
   }
 
-  async function setDerivation(glyph, radicalGlyph) {
-    setSaving(true)
-    try {
-      await saveStrokeDerivation(glyph, radicalGlyph)
-      setStrokeEditGlyph(null)
-      await loadStrokes()
-    } finally {
-      setSaving(false)
-    }
-  }
-
   if (error) {
     return <div style={{ padding: 24, fontFamily: 'sans-serif' }}>No se pudo cargar el admin: {String(error.message)}</div>
   }
 
   const editing = editingGlyph ? withStatus.find((r) => r.glyph === editingGlyph) : null
-  const pickerQ = pickerQuery.trim().toLowerCase()
+  const pickerQRaw = pickerQuery.trim()
+  const pickerQ = pickerQRaw.toLowerCase()
   const radicalCandidates = (canonicalRadicals || []).map((r) => ({
     id: r.id,
     glyph: r.glyph,
@@ -210,18 +185,16 @@ export default function RadicalCurator() {
     label: s.derivesFrom ? `trazo, deriva de ${s.derivesFrom}` : 'trazo (bloque CJK Strokes)',
     isStroke: true,
   }))
-  // Auxiliares y kanji solo entran a la lista de candidatos si hay
-  // busqueda: son 321 y 3668, mostrarlos sin filtrar haria el modal
-  // lento sin ganar nada (radicales/trazos ya cubren la mayoria de
-  // casos, y son pocos como para mostrarlos siempre).
-  const otherCandidates = pickerQ
-    ? (canonicalAuxiliares || []).map((x) => ({
-        id: x.id,
-        glyph: x.glyph,
-        label: 'auxiliar',
-        isOther: true,
-      }))
-    : []
+  // Los auxiliares (mismo orden de magnitud que los 240 radicales) se
+  // muestran siempre, igual que radicales/trazos. Kanji si que solo
+  // entra a la lista de candidatos si hay busqueda: son 3668, mostrarlos
+  // sin filtrar si haria el modal lento sin ganar nada.
+  const otherCandidates = (canonicalAuxiliares || []).map((x) => ({
+    id: x.id,
+    glyph: x.glyph,
+    label: 'auxiliar',
+    isOther: true,
+  }))
   const kanjiCandidates = pickerQ
     ? (canonicalKanji || []).map((k) => ({
         id: k.id,
@@ -237,9 +210,17 @@ export default function RadicalCurator() {
       const badge = r.isStroke ? 'trazo' : r.isOther ? 'auxiliar' : r.isKanji ? 'kanji' : ''
       return r.glyph.includes(pickerQ) || r.label.toLowerCase().includes(pickerQ) || badge.includes(pickerQ)
     })
-
-  const strokeEditing = strokeEditGlyph ? strokes?.find((s) => s.glyph === strokeEditGlyph) : null
-  const strokePickerQ = strokePickerQuery.trim().toLowerCase()
+  // Si lo que se busco es exactamente UN glifo (por codepoint, no por
+  // longitud de string: ojo con los que usan par subrogado) y no esta
+  // en ninguna de las 4 listas conocidas, se puede agregar tal cual
+  // como componente nuevo (queda como auxiliar nuevo en el siguiente
+  // build: resolve_component_id() en build_dataset.py ya sabe crear un
+  // nodo "extra" para cualquier glifo no visto antes).
+  const canAddCustomGlyph =
+    pickerQRaw.length > 0 &&
+    Array.from(pickerQRaw).length === 1 &&
+    pickerQRaw !== editingGlyph &&
+    !pickerCandidates.some((c) => c.glyph === pickerQRaw)
 
   return (
     <div className="curator">
@@ -257,8 +238,8 @@ export default function RadicalCurator() {
           ))}
         </div>
 
-        {kind !== 'stroke' && !radicals && <p>Cargando...</p>}
-        {kind !== 'stroke' && radicals && (
+        {!radicals && <p>Cargando...</p>}
+        {radicals && (
           <p>
             {kind === 'radical' ? '242 radicales.' : `${radicals.length} auxiliares.`} {counts['needs-review']} sin
             componentes y sin revisar{kind === 'radical' ? ' (esperado: solo 2-3, los de un trazo)' : ''}.{' '}
@@ -266,34 +247,25 @@ export default function RadicalCurator() {
             {counts['confirmed-atomic']} confirmados como atómicos.
           </p>
         )}
-        {kind === 'stroke' && !strokes && <p>Cargando...</p>}
-        {kind === 'stroke' && strokes && (
-          <p>
-            {strokes.length} trazos del bloque oficial CJK Strokes. {strokeCounts.derived} ya con radical asignado.{' '}
-            {strokeCounts.undetermined} sin asignar todavía.
-          </p>
-        )}
 
         <div className="curator-controls">
           <input
             className="curator-search"
-            placeholder={kind === 'stroke' ? 'Buscar trazo o radical asignado...' : 'Buscar radical o significado...'}
+            placeholder="Buscar radical o significado..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {kind !== 'stroke' && (
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="needs-review">Sin revisar ({counts['needs-review']})</option>
-              <option value="auto-ok">Automático ({counts['auto-ok']})</option>
-              <option value="manual">Curado a mano ({counts.manual})</option>
-              <option value="confirmed-atomic">Confirmado atómico ({counts['confirmed-atomic']})</option>
-              <option value="all">Todos</option>
-            </select>
-          )}
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="needs-review">Sin revisar ({counts['needs-review']})</option>
+            <option value="auto-ok">Automático ({counts['auto-ok']})</option>
+            <option value="manual">Curado a mano ({counts.manual})</option>
+            <option value="confirmed-atomic">Confirmado atómico ({counts['confirmed-atomic']})</option>
+            <option value="all">Todos</option>
+          </select>
         </div>
       </header>
 
-      {kind !== 'stroke' && radicals && (
+      {radicals && (
         <div className="curator-list">
           {filtered.map((r) => (
             <div key={r.id} className={`curator-row status-${r.status}`}>
@@ -316,14 +288,14 @@ export default function RadicalCurator() {
                 </div>
               </div>
               <div className="curator-row-actions">
-                {r.status !== 'confirmed-atomic' && (
+                {r.manual == null && (
                   <button
                     className="curator-approve-btn"
-                    onClick={() => approveAsAtomic(r)}
+                    onClick={() => approveAsCurated(r)}
                     disabled={approvingGlyph === r.glyph}
-                    title="Confirmar que este radical de verdad no tiene componentes"
+                    title="Confirmar estos componentes (o la falta de ellos) como curados a mano"
                   >
-                    {approvingGlyph === r.glyph ? 'Guardando...' : 'Aprobar como unidad'}
+                    {approvingGlyph === r.glyph ? 'Guardando...' : 'Curado'}
                   </button>
                 )}
                 <button className="curator-edit-btn" onClick={() => openEditor(r)}>
@@ -333,25 +305,6 @@ export default function RadicalCurator() {
             </div>
           ))}
           {filtered.length === 0 && <div className="curator-empty-state">Nada que mostrar con este filtro.</div>}
-        </div>
-      )}
-
-      {kind === 'stroke' && strokes && (
-        <div className="curator-list">
-          {filteredStrokes.map((s) => (
-            <div key={s.glyph} className={`curator-row status-${s.derivesFrom ? 'confirmed-atomic' : 'needs-review'}`}>
-              <div className="curator-glyph">{s.glyph}</div>
-              <div className="curator-info">
-                <div className="curator-meaning">{s.derivesFrom ? `Deriva de ${s.derivesFrom}` : '(sin asignar)'}</div>
-                <div className="curator-meta">trazo, bloque CJK Strokes</div>
-              </div>
-              <div className="curator-row-actions">
-                <button className="curator-edit-btn" onClick={() => setStrokeEditGlyph(s.glyph)}>
-                  Asignar radical
-                </button>
-              </div>
-            </div>
-          ))}
         </div>
       )}
 
@@ -375,8 +328,8 @@ export default function RadicalCurator() {
               <div className="curator-selection-label">Se compone de ({editSelection.length}):</div>
               <div className="curator-comps">
                 {editSelection.length === 0 && <span className="curator-empty">ninguno (átomo confirmado)</span>}
-                {editSelection.map((g) => (
-                  <button className="curator-chip removable" key={g} onClick={() => toggleComponent(g)}>
+                {editSelection.map((g, i) => (
+                  <button className="curator-chip removable" key={`${g}-${i}`} onClick={() => removeComponentAt(i)}>
                     {g} ×
                   </button>
                 ))}
@@ -386,22 +339,35 @@ export default function RadicalCurator() {
             <input
               className="curator-search"
               autoFocus
-              placeholder="Buscar radical o trazo, o escribe algo para buscar también entre auxiliares y kanji..."
+              placeholder="Buscar radical, trazo o auxiliar, o escribe algo para buscar también entre kanji..."
               value={pickerQuery}
               onChange={(e) => setPickerQuery(e.target.value)}
             />
             <div className="curator-picker-grid">
-              {pickerCandidates.map((r) => (
+              {canAddCustomGlyph && (
                 <button
-                  key={r.id}
-                  className={`curator-picker-item${editSelection.includes(r.glyph) ? ' selected' : ''}${r.isStroke ? ' stroke' : ''}${r.isOther ? ' other' : ''}${r.isKanji ? ' kanji' : ''}`}
-                  onClick={() => toggleComponent(r.glyph)}
-                  title={r.label}
+                  className="curator-picker-item add-new"
+                  onClick={() => addComponent(pickerQRaw)}
+                  title="No esta en radicales, trazos, auxiliares ni kanji: agregarlo como componente nuevo"
                 >
-                  <span className="g">{r.glyph}</span>
-                  <span className="m">{r.isStroke ? 'trazo' : r.isOther ? 'auxiliar' : r.label}</span>
+                  <span className="g">{pickerQRaw}</span>
+                  <span className="m">+ agregar nuevo</span>
                 </button>
-              ))}
+              )}
+              {pickerCandidates.map((r) => {
+                const count = editSelection.filter((g) => g === r.glyph).length
+                return (
+                  <button
+                    key={r.id}
+                    className={`curator-picker-item${count > 0 ? ' selected' : ''}${r.isStroke ? ' stroke' : ''}${r.isOther ? ' other' : ''}${r.isKanji ? ' kanji' : ''}`}
+                    onClick={() => addComponent(r.glyph)}
+                    title={r.label}
+                  >
+                    <span className="g">{r.glyph}</span>
+                    <span className="m">{r.isStroke ? 'trazo' : r.isOther ? 'auxiliar' : r.label}{count > 1 ? ` ×${count}` : ''}</span>
+                  </button>
+                )
+              })}
             </div>
 
             <div className="curator-modal-actions">
@@ -416,73 +382,6 @@ export default function RadicalCurator() {
               <button className="primary" onClick={save} disabled={saving}>
                 {saving ? 'Guardando...' : 'Guardar'}
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {strokeEditing && (
-        <div className="curator-modal-backdrop" onClick={(e) => e.target === e.currentTarget && setStrokeEditGlyph(null)}>
-          <div className="curator-modal">
-            <div className="curator-modal-head">
-              <div className="curator-glyph big">{strokeEditing.glyph}</div>
-              <div>
-                <div className="curator-meaning">
-                  {strokeEditing.derivesFrom ? `Deriva de ${strokeEditing.derivesFrom}` : 'Sin asignar todavía'}
-                </div>
-                <div className="curator-meta">trazo, bloque CJK Strokes</div>
-              </div>
-              <button className="curator-close" onClick={() => setStrokeEditGlyph(null)}>
-                ×
-              </button>
-            </div>
-
-            <input
-              className="curator-search"
-              autoFocus
-              placeholder="Buscar el radical del que deriva este trazo..."
-              value={strokePickerQuery}
-              onChange={(e) => setStrokePickerQuery(e.target.value)}
-            />
-            <div className="curator-picker-grid">
-              {[
-                ...(canonicalRadicals || []).map((r) => ({ id: r.id, glyph: r.glyph, label: r.meaning, isStroke: false })),
-                ...(canonicalStrokes || []).map((s) => ({
-                  id: `stroke-${s.glyph}`,
-                  glyph: s.glyph,
-                  label: s.derivesFrom ? `trazo, deriva de ${s.derivesFrom}` : 'trazo (bloque CJK Strokes)',
-                  isStroke: true,
-                })),
-              ]
-                .filter((r) => r.glyph !== strokeEditing.glyph)
-                .filter((r) => {
-                  if (!strokePickerQ) return true
-                  const badge = r.isStroke ? 'trazo' : ''
-                  return r.glyph.includes(strokePickerQ) || r.label.toLowerCase().includes(strokePickerQ) || badge.includes(strokePickerQ)
-                })
-                .map((r) => (
-                  <button
-                    key={r.id}
-                    className={`curator-picker-item${strokeEditing.derivesFrom === r.glyph ? ' selected' : ''}${r.isStroke ? ' stroke' : ''}`}
-                    onClick={() => setDerivation(strokeEditing.glyph, r.glyph)}
-                    title={r.label}
-                    disabled={saving}
-                  >
-                    <span className="g">{r.glyph}</span>
-                    <span className="m">{r.isStroke ? 'trazo' : r.label}</span>
-                  </button>
-                ))}
-            </div>
-
-            <div className="curator-modal-actions">
-              <button onClick={() => setStrokeEditGlyph(null)} disabled={saving}>
-                Cerrar
-              </button>
-              {strokeEditing.derivesFrom && (
-                <button onClick={() => setDerivation(strokeEditing.glyph, null)} disabled={saving}>
-                  Quitar asignación
-                </button>
-              )}
             </div>
           </div>
         </div>
