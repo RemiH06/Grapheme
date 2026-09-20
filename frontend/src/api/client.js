@@ -89,3 +89,23 @@ export function saveRadicalComponents(glyph, components) {
 export function clearRadicalComponents(glyph) {
   return req(`/admin/radical-components/${encodeURIComponent(glyph)}`, { method: 'DELETE' })
 }
+
+export function fetchAdminAuxiliares() {
+  return req('/admin/auxiliares')
+}
+
+export function fetchAdminStrokes() {
+  return req('/admin/strokes')
+}
+
+export function fetchAdminKanji() {
+  return req('/admin/kanji')
+}
+
+export function saveStrokeDerivation(glyph, derivesFrom) {
+  return req(`/admin/stroke-derivation/${encodeURIComponent(glyph)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ derivesFrom }),
+  })
+}

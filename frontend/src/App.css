@@ -478,7 +478,11 @@ kbd {
 
 /* ---------- curador de componentes de radicales (/?curate=radicals) ---------- */
 .curator {
-  min-height: 100vh;
+  /* body tiene overflow:hidden global (pensado para el layout de la app
+     normal, que scrollea en paneles internos, no en la pagina) -- esta
+     es una lista larga simple, asi que necesita su propio scroll. */
+  height: 100vh;
+  overflow-y: auto;
   background: var(--bg);
   color: var(--ink);
   font-family: 'Zen Kaku Gothic New', 'Hiragino Sans', system-ui, sans-serif;
@@ -486,7 +490,18 @@ kbd {
   max-width: 960px;
   margin: 0 auto;
 }
-.curator-head h1 { font-size: 20px; margin: 0 0 8px; }
+.curator-head h1 { font-size: 20px; margin: 0 0 12px; }
+.curator-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.curator-tab {
+  padding: 6px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 13px;
+}
+.curator-tab.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .curator-head p { color: var(--muted); font-size: 13px; margin: 0 0 16px; line-height: 1.5; }
 .curator-controls { display: flex; gap: 10px; margin-bottom: 18px; }
 .curator-search {
@@ -541,7 +556,8 @@ kbd {
 .curator-chip.removable:hover { border-color: var(--accent); color: var(--accent); }
 .curator-empty { font-size: 12px; color: var(--muted); font-style: italic; }
 .curator-empty-state { padding: 40px; text-align: center; color: var(--muted); }
-.curator-edit-btn {
+.curator-row-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.curator-edit-btn, .curator-approve-btn {
   flex-shrink: 0;
   padding: 6px 14px;
   border-radius: 8px;
@@ -550,8 +566,11 @@ kbd {
   color: var(--ink);
   cursor: pointer;
   font-size: 13px;
+  white-space: nowrap;
 }
 .curator-edit-btn:hover { border-color: var(--accent); color: var(--accent); }
+.curator-approve-btn:hover:not(:disabled) { border-color: var(--cat-nature); color: var(--cat-nature); }
+.curator-approve-btn:disabled { opacity: 0.6; cursor: default; }
 
 .curator-modal-backdrop {
   position: fixed;
@@ -610,6 +629,12 @@ kbd {
 .curator-picker-item .g { font-family: 'Noto Serif JP', serif; font-size: 20px; }
 .curator-picker-item .m { font-size: 9px; color: var(--muted); text-align: center; line-height: 1.2; }
 .curator-picker-item.selected { border-color: var(--accent); background: var(--accent-soft); }
+.curator-picker-item.stroke { border-style: dashed; }
+.curator-picker-item.stroke .m { font-style: italic; }
+.curator-picker-item.other { border-style: dotted; border-color: var(--cat-food); }
+.curator-picker-item.other .m { font-style: italic; color: var(--cat-food); }
+.curator-picker-item.kanji { border-color: var(--cat-places); }
+.curator-picker-item.kanji .m { color: var(--cat-places); }
 .curator-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .curator-modal-actions button {
   padding: 8px 16px;

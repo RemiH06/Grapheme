@@ -24,7 +24,22 @@ from . import db
 
 DATA_PATH = Path(__file__).resolve().parent / "data" / "graph_data.json"
 STROKES_PATH = Path(__file__).resolve().parent / "data" / "strokes.json"
-MANUAL_COMPONENTS_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "radical_components_manual.json"
+_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+MANUAL_COMPONENTS_PATH = _DATA_DIR / "radical_components_manual.json"
+STROKE_DERIVATION_PATH = _DATA_DIR / "stroke_derivation_manual.json"
+
+# Los del bloque oficial "CJK Strokes" (U+31C0-U+31E5) que ya NO
+# duplican a un radical existente (unica fuente de verdad para esta
+# lista: el frontend la consume via GET /admin/strokes, no tiene su
+# propia copia). Excluidos hasta ahora, todos por duplicar visualmente
+# un radical de un solo trazo: ㇐=一, ㇑=｜, ㇔=丶, ㇒=ノ, ㇚=亅 (horizontal,
+# vertical, punto, diagonal-izquierda, gancho vertical), y ㇠=乙 (HXWG,
+# el mismo doblez compuesto que 乙 -- confirmado visualmente).
+CJK_STROKES = [
+    '㇀', '㇁', '㇂', '㇃', '㇄', '㇅', '㇆', '㇇', '㇈', '㇉', '㇊', '㇋', '㇌', '㇍', '㇎', '㇏',
+    '㇓', '㇕', '㇖', '㇗', '㇘', '㇙', '㇛', '㇜', '㇝', '㇞', '㇟',
+    '㇡', '㇢', '㇣', '㇤', '㇥',
+]
 
 app = FastAPI(
     title="Grapheme API",
@@ -243,3 +258,84 @@ def admin_clear_radical_components(glyph: str):
     manual.pop(glyph, None)
     _save_manual_components(manual)
     return {"ok": True}
+
+
+@app.get("/admin/auxiliares")
+def admin_auxiliares():
+    """Los nodos 'extra' que son componentes reales sin pronunciacion y
+    fuera de los 242 (todos menos los 4 'isExample', que si tienen
+    pronunciacion real: esos no son auxiliares, son ejemplos ilustrativos
+    de radicales aislados, ver seccion 4.1 de docs/METODOLOGIA.md).
+    Reusa /admin/radical-components/{glyph} para editar sus componentes
+    (ya soporta cualquier glifo, no solo los 242, desde la seccion 11)."""
+    by_id = _nodes_by_id()
+    manual = _load_manual_components()
+    out = []
+    for x in _graph_cache.get("extras", []):
+        if x.get("isExample") or x.get("pinyin"):
+            continue
+        comp_edges = [e for e in _graph_cache["edges"] if e["to"] == x["id"]]
+        components = [
+            {"id": other["id"], "glyph": other["glyph"], "role": e["role"]}
+            for e in comp_edges
+            if (other := by_id.get(e["from"]))
+        ]
+        out.append({
+            "id": x["id"],
+            "glyph": x["glyph"],
+            "meaning": None,
+            "strokeCount": None,
+            "components": components,
+            "manual": manual.get(x["glyph"]),
+        })
+    return out
+
+
+def _load_stroke_derivations():
+    if not STROKE_DERIVATION_PATH.exists():
+        return {}
+    with open(STROKE_DERIVATION_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _save_stroke_derivations(data):
+    STROKE_DERIVATION_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(STROKE_DERIVATION_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
+
+
+@app.get("/admin/strokes")
+def admin_strokes():
+    """Los 33 trazos del bloque oficial CJK Strokes (ver CJK_STROKES
+    arriba), con el radical del que ya se dijo que derivan, si existe."""
+    derivations = _load_stroke_derivations()
+    return [{"glyph": g, "derivesFrom": derivations.get(g)} for g in CJK_STROKES]
+
+
+class StrokeDerivationIn(BaseModel):
+    derivesFrom: str | None = None
+
+
+@app.post("/admin/stroke-derivation/{glyph}")
+def admin_set_stroke_derivation(glyph: str, body: StrokeDerivationIn):
+    derivations = _load_stroke_derivations()
+    if body.derivesFrom:
+        derivations[glyph] = body.derivesFrom
+    else:
+        derivations.pop(glyph, None)
+    _save_stroke_derivations(derivations)
+    return {"glyph": glyph, "derivesFrom": body.derivesFrom}
+
+
+@app.get("/admin/kanji")
+def admin_kanji():
+    """Los 3668 caracteres del catalogo (jouyou+HSK), solo lo minimo
+    para ofrecerlos como opcion en el buscador de componentes -- a
+    veces la descomposicion real de un radical/auxiliar SI es un kanji
+    completo, no solo otro radical (ej. 巷 usa 共, que ni es de los 242
+    ni es un auxiliar sin pronunciacion: es un caracter real). No se
+    revisan/editan aqui, solo se listan para poder elegirlos."""
+    return [
+        {"id": c["id"], "glyph": c["glyph"], "meaning": c["meaning"]}
+        for c in _graph_cache.get("characters", [])
+    ]

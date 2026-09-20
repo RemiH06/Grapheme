@@ -39,6 +39,7 @@ EXCEL_PATH = ROOT / "docs" / "Pictograms.xlsx"
 SOURCES_DIR = ROOT / "data" / "sources"
 OUT_PATH = ROOT / "backend" / "app" / "data" / "graph_data.json"
 MANUAL_COMPONENTS_PATH = ROOT / "data" / "radical_components_manual.json"
+STROKE_DERIVATION_PATH = ROOT / "data" / "stroke_derivation_manual.json"
 
 
 def load_manual_radical_components():
@@ -51,6 +52,18 @@ def load_manual_radical_components():
     if not MANUAL_COMPONENTS_PATH.exists():
         return {}
     with open(MANUAL_COMPONENTS_PATH, encoding='utf-8') as f:
+        return json.load(f)
+
+
+def load_stroke_derivations():
+    """glifo de trazo (bloque CJK Strokes) -> glifo del radical del que
+    se dijo que deriva, curado a mano desde /?curate=radicals. Se aplica
+    como una fusion mas (igual que MERGE_INTO) en resolve_component_id:
+    si el trazo aparece como componente de algo, cuenta como si fuera
+    ese radical directamente, en vez de crear su propio nodo "extra"."""
+    if not STROKE_DERIVATION_PATH.exists():
+        return {}
+    with open(STROKE_DERIVATION_PATH, encoding='utf-8') as f:
         return json.load(f)
 
 CATS = ['Primitive', 'Components', 'Human', 'Body', 'Matter', 'Places',
@@ -155,7 +168,7 @@ RADICAL_MEANING = {
     '乙': 'second, twist', '亅': 'hook',
     '二': 'two', '亠': 'lid', '人': 'person', '⺅': 'person (side form)',
     '𠆢': 'person (top form)', '儿': 'legs, son', '入': 'enter', 'ハ': 'eight, divide',
-    '丷': 'divide (variant)', '冂': 'wide, borders', '冖': 'cloth cover',
+    '冂': 'wide, borders', '冖': 'cloth cover',
     '冫': 'ice', '几': 'small table, stool', '凵': 'open container',
     '刀': 'knife, sword', '⺉': 'knife (side form)', '力': 'power, strength',
     '勹': 'wrap', '匕': 'spoon, ladle', '匚': 'box, container',
@@ -168,7 +181,7 @@ RADICAL_MEANING = {
     '夕': 'evening', '大': 'big', '女': 'woman', '子': 'child',
     '宀': 'roof', '寸': 'inch, hand rule', '小': 'small',
     '⺌': 'small (variant)', '尢': 'lame leg, weak', '尸': 'corpse, dwelling',
-    '屮': 'sprout', '山': 'mountain', '川': 'river', '巛': 'river (variant)',
+    '屮': 'sprout', '山': 'mountain', '川': 'river',
     '工': 'work, craft', '已': 'already, stop', '巾': 'cloth, towel',
     '干': 'dry, shield, stem', '幺': 'tiny, thread', '广': 'shelter',
     '廴': 'long stride', '廾': 'two hands, clasped', '弋': 'dart, arrow with cord',
@@ -252,7 +265,15 @@ MERGE_INTO = {
     '礻': '示', '衤': '衣', '钅': '金', '釒': '金',
     '艹': '⺾', '⺮': '竹', '罒': '⺲', '灬': '火',
     '辶': '⻌', '⺼': '肉', '爫': '爪',
-    '丨': '｜', '丿': 'ノ', '乚': '乙', '彐': '彑',
+    '丨': '｜', '丿': 'ノ', '乚': '乙', '乛': '乙', '⺄': '乙', '彐': '彑',
+    # Variantes caligraficas de 乙 en el bloque de extension CJK-B,
+    # confirmadas una por una en Wiktionary ("Kangxi radical 5, 乙+0"):
+    # 𠃉, 𠃊, 𠃋, 𠃌, 𠃍, 𠃎. NO son radicales distintos aunque se vean
+    # un poco distinto (son la misma pieza dibujada en fuentes/epocas
+    # distintas); el patron se rompe justo despues (𠃏 ya es "乙+1",
+    # otro caracter real, y 𠃈 antes es de un radical totalmente
+    # distinto), asi que no se agregaron en bloque sin verificar.
+    '𠃉': '乙', '𠃊': '乙', '𠃋': '乙', '𠃌': '乙', '𠃍': '乙', '𠃎': '乙',
     '丬': '爿',
     # Radicales simplificados en chino continental (distintos del
     # tradicional que trae el Excel, pero la misma idea).
@@ -264,12 +285,36 @@ MERGE_INTO = {
     # 戸 (puerta, forma japonesa, U+6238) vs 戶 tradicional (U+6236) y
     # 户 simplificado (U+6237): mismo radical, tres codepoints distintos.
     '户': '戸', '戶': '戸',
+    # 巛 ("river (variant)", fila propia del Excel) y 川 (el carácter
+    # real "Stream", N5) son el mismo radical Kangxi #47: a diferencia
+    # de 丷/八, aquí no hay un rol posicional distinto que preservar
+    # (巛 no significa nada aparte, literalmente dice "variante"), asi
+    # que si van juntos.
+    '巛': '川',
     # 八 (el caracter real "ocho") vs ハ (la forma-trazo que trae el
     # Excel): los datasets de descomposicion casi siempre usan 八.
-    '八': 'ハ',
+    # 丷 (la "corona" que corona 兰/关/前...) tambien era fila propia del
+    # Excel con su propio significado ("divide (variant)"), pero decidido
+    # a mano que va junto con ハ/八: aunque casi siempre aparece en
+    # posicion de corona y 八/ハ como digito completo, comparten raiz y
+    # no hay necesidad real de mantenerlos separados (a diferencia de
+    # otros pares donde la posicion SI cambia el significado).
+    '八': 'ハ', '丷': 'ハ',
     # 老 (viejo, caracter completo) vs ⺹ (forma recortada de "corona"
     # que trae el Excel).
     '老': '⺹',
+    # ク (katakana "ku") es un extracto grafico de 久 ("mucho tiempo",
+    # radical Y caracter real, N2/HSK2): su propio on'yomi es く,
+    # literalmente de ahi sale la forma de la katakana. No hace falta
+    # un nodo nuevo, resuelve directo al radical/kanji que ya existe.
+    'ク': '久',
+    # Trazos del bloque oficial CJK Strokes que duplican, forma por
+    # forma, un radical de un solo trazo ya existente (por eso se
+    # sacaron de la lista ofrecida en la pestana "Trazos" del curador):
+    # sin esta fusion, cualquier componente de KanjiVG que apunte al
+    # codepoint de trazo directamente quedaba flotando como un
+    # "auxiliar" fantasma en vez de resolver al radical real.
+    '㇐': '一', '㇑': '｜', '㇔': '丶', '㇒': 'ノ', '㇚': '亅', '㇠': '乙',
     # Encontrados al integrar KanjiVG (mismos "dos codepoints" del punto 2):
     # 覀 forma recortada de 襾/西 cuando corona un caracter (ej. 価).
     '覀': '西',
@@ -304,6 +349,17 @@ MERGE_INTO = {
     # siempre, radical de indexacion en su forma tradicional/simplificada
     # que no esta en el catalogo de 242 en vez de la shinjitai que si.
     '黑': '黒', '卤': '鹵',
+}
+
+# `variants` (mostrado en el panel como "tambien se escribe") solo se
+# llena en el paso 1 a partir de FILAS reales del Excel: si una variante
+# nunca fue fila propia (solo se descubrio al usar MERGE_INTO para
+# resolver un componente, ej. 乚/乛/⺄ -> 乙, encontrados curando a mano
+# los componentes de otros radicales), nunca aparece ahi aunque el merge
+# ya funcione para conexiones. Este diccionario complementa esos casos.
+EXTRA_VARIANTS = {
+    '乙': ['乚', '乛', '⺄', '𠃉', '𠃊', '𠃋', '𠃌', '𠃍', '𠃎'],
+    '久': ['ク'],
 }
 
 # El radical de "oreja" (阝) es ambiguo sin ver la posicion: a la
@@ -565,7 +621,7 @@ def pick_illustrative_example(glyph, mega_by_glyph):
 DOMAIN_MAP = {
     '一': 'Abstract', '｜': 'Abstract', '丶': 'Abstract', 'ノ': 'Abstract', '乙': 'Abstract',
     '亅': 'Abstract', '二': 'Abstract', '亠': 'Objects', '人': 'People', '儿': 'Body',
-    '入': 'Actions', 'ハ': 'Abstract', '丷': 'Abstract', '冂': 'Places', '冖': 'Objects',
+    '入': 'Actions', 'ハ': 'Abstract', '冂': 'Places', '冖': 'Objects',
     '冫': 'Nature', '几': 'Objects', '凵': 'Objects', '刀': 'Objects', '力': 'Abstract',
     '勹': 'Actions', '匕': 'Objects', '匚': 'Objects', '十': 'Abstract', '卜': 'Abstract',
     '卩': 'People', '厂': 'Places', '厶': 'Abstract', '又': 'Actions', 'マ': 'Abstract',
@@ -573,7 +629,7 @@ DOMAIN_MAP = {
     '口': 'Body', '囗': 'Places', '土': 'Nature', '士': 'People', '夂': 'Actions',
     '夕': 'Nature', '大': 'Abstract', '女': 'People', '子': 'People', '宀': 'Places',
     '寸': 'Abstract', '小': 'Abstract', '尢': 'Body', '尸': 'Body', '屮': 'Nature',
-    '山': 'Nature', '川': 'Nature', '巛': 'Nature', '工': 'Objects', '已': 'Abstract',
+    '山': 'Nature', '川': 'Nature', '工': 'Objects', '已': 'Abstract',
     '巾': 'Objects', '干': 'Abstract', '幺': 'Objects', '广': 'Places', '廴': 'Actions',
     '廾': 'Actions', '弋': 'Objects', '弓': 'Objects', 'ヨ': 'Animals', '彑': 'Animals',
     '彡': 'Body', '彳': 'Actions', '⺾': 'Nature', '⻏': 'Places', '⻖': 'Nature',
@@ -707,6 +763,13 @@ def build():
         if not node['meaning']:
             node['meaning'] = RADICAL_MEANING.get(target)
 
+    for target, extra_vs in EXTRA_VARIANTS.items():
+        if target not in canonical:
+            continue
+        for v in extra_vs:
+            if v not in canonical[target]['variants']:
+                canonical[target]['variants'].append(v)
+
     canonical_glyphs = set(canonical.keys())
 
     # ---- 2) catalogo completo de kanji joyo + hanzi HSK 3.0 ----
@@ -809,9 +872,18 @@ def build():
 
     # ---- 3) aristas: componente -> radical/compuesto/extra ----
     extra_nodes = {}
+    stroke_derivations = load_stroke_derivations()
 
     def resolve_component_id(glyph):
-        glyph = MERGE_INTO.get(glyph, glyph)
+        # Encadenado porque un trazo puede "derivar de" otro trazo (que
+        # a su vez derive de un radical): un solo intento no bastaria
+        # para llegar al final de la cadena. `seen` corta cualquier
+        # ciclo (no deberia haber ninguno en uso normal, red de
+        # seguridad barata) en vez de dejarlo en loop infinito.
+        seen = set()
+        while glyph not in seen:
+            seen.add(glyph)
+            glyph = MERGE_INTO.get(glyph, stroke_derivations.get(glyph, glyph))
         if glyph in radical_id_by_glyph:
             return radical_id_by_glyph[glyph]
         if glyph in compound_id_by_glyph:
@@ -862,6 +934,20 @@ def build():
             add_manual_edges_for(radical_id, manual_components[glyph])
         elif not is_pictographic(glyph, mmh_by_glyph):
             add_edges_for(glyph, radical_id)
+
+    # Curación manual para radicales que NI SIQUIERA están en los 242
+    # (ej. 廴, radical Kangxi legítimo -- "zancada larga", #54 -- que de
+    # plano falta en el Excel original, no es un caso de fusión). No se
+    # les da de alta como radical canónico (eso cambiaría el conteo de
+    # "242" y es una decisión aparte), pero sí se les deja tener
+    # componentes reales: `resolve_component_id` los crea/reusa como
+    # nodo "extra" igual que cualquier componente fonético fuera de
+    # catálogo, y de ahí en adelante se comportan como cualquier otro
+    # extra (seccion 10), incluida la resolución de dominio al final.
+    for glyph, comps in manual_components.items():
+        if glyph in radical_id_by_glyph:
+            continue  # ya se proceso arriba como radical canonico
+        add_manual_edges_for(resolve_component_id(glyph), comps)
 
     # Un puñado de radicales canonicos (韭, 鹵, 黽, 鼎, 鼠, 龠...) son
     # pictogramas puros legitimos -- igual que 木/水/火 -- pero ademas no
