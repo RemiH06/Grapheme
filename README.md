@@ -8,7 +8,7 @@
 ██║   ██║██╔══██╗██╔══██║██╔═══╝ ██╔══██║██╔══╝  ██║╚██╔╝██║██╔══╝  
 ╚██████╔╝██║  ██║██║  ██║██║     ██║  ██║███████╗██║ ╚═╝ ██║███████╗
  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝╚══════╝
-        by Hex (@RemiH06)          version 0.1
+        by RemLam (@RemiH06)          version 0.1
 ```
 
 [![AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge)](LICENSE)
@@ -107,4 +107,4 @@ canvas + d3-force en React.
 
 ## Autoría
 
-por Hex ([@RemiH06](https://github.com/RemiH06))
+por RemLam ([@RemiH06](https://github.com/RemiH06))
